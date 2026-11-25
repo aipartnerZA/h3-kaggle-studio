@@ -46,7 +46,11 @@ say() { echo "[$TAG] $*"; }
 
 mkdir -p "$RUN_DIR"
 
-command -v kaggle >/dev/null 2>&1 || fail "kaggle CLI not found — install it with 'pip install kaggle' or 'uv tool install kaggle'"
+if [ "$DRY" = "1" ]; then
+  say "dry run: kaggle CLI not required (nothing is pushed)"
+else
+  command -v kaggle >/dev/null 2>&1 || fail "kaggle CLI not found — install it with 'pip install kaggle' or 'uv tool install kaggle'"
+fi
 
 # ---- 1. the batch itself -----------------------------------------------------
 [ -f "$JOBS" ] || fail "no $JOBS — stage shots with stage_shot.py --tag $TAG"
