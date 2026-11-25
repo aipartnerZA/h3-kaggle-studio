@@ -25,7 +25,7 @@ assert_node_syntax
 run_tests
 
 head_l "P0.4 gate registry responds"
-for g in P0 P1 P2 P3 P4 P5 P6; do
+for g in P0 P1 P2 P3 P4 P5 P6 P7; do
   [ -f "scripts/gates/${g}.sh" ] && green "gate ${g} present" || red "gate ${g} missing"
 done
 
