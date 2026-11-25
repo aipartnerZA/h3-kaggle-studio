@@ -37,11 +37,14 @@ jobs:
             [ -f "$f" ] && node --check "$f"
           done
 
-      - name: no operator paths or names leaked into the tree
+      - name: no operator paths or names leaked into the shipped tree
         run: |
           # Patterns are split so this file does not itself trip the check it performs.
+          # Scans shipped files only: tests/ and scripts/gates/ carry the patterns as
+          # negative fixtures, exactly as the P1 gate does.
           PAT='wesaipartn[e]r|/root/ap[p]s|/srv/storag[e]|aipartner\.co\.z[a]'
-          if grep -rInE "$PAT" --exclude-dir=.git --exclude-dir=vendor . ; then
+          FILES=$(git ls-files | grep -vE '^(tests|scripts/gates)/' || true)
+          if [ -n "$FILES" ] && printf '%s\n' "$FILES" | xargs grep -InE "$PAT"; then
             echo "leaked operator identity or host path"; exit 1
           fi
 
