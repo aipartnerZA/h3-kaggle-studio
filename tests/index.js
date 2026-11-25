@@ -4,4 +4,5 @@ require('./kaggle.test.js');
 require('./pipeline.test.js');
 require('./worker.test.js');
 require('./api.test.js');
+require('./onboarding.test.js');
 require('./repo.test.js');

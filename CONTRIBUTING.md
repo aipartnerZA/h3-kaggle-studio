@@ -24,7 +24,7 @@ lib/pipeline.js      stage -> build -> push -> poll -> collect -> verify -> publ
 lib/worker.js        the poller that drives a run to completion
 lib/store.js         run state on disk under data/
 engine/*.py *.sh     the scripts that actually build the kernel and move files
-public/              the UI: no framework, no build step, vendored Swiper and GSAP
+public/              the UI: no framework, no build step, no vendored third-party bundle (GSAP only)
 scripts/gates/       the phase gates; each one proves a claim or fails
 ```
 

@@ -130,7 +130,8 @@ Free GPU allowance is 30 hours per week, resetting weekly.
 
 - bundle, mirror, cache or redistribute model weights;
 - ship a deployment that is already authenticated, or any credential at all;
-- hide the territory question, or let it be answered by silence;
+- hide the territory question, or let it be answered by silence: the exclusion is stated inside the
+  terms, and one quiet link on that panel declares an excluded territory instead of continuing;
 - ship client renders, client names, or this project's operator paths;
 - let the setup gate be bypassed in the browser; `H3UI_SKIP_ONBOARDING=1` exists but is honoured
   **only** on a loopback bind, and it is a developer convenience, not a licence exemption. Skipping it

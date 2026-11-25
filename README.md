@@ -65,8 +65,9 @@ bash scripts/install.sh
 node server.js
 ```
 
-Open **http://127.0.0.1:8804** and follow the setup. Six screens: what this is, the model licence, the
-Kaggle rules, how to get your token, where to paste it, and then you are in.
+Open **http://127.0.0.1:8804** and follow the setup. Two screens: the terms, then your Kaggle account.
+The terms are one scrollable panel — the MiniMax H3 licence and Kaggle's rules together — and the
+Continue button stays disabled until you have scrolled to the bottom of it.
 
 ### Where the Kaggle token goes
 

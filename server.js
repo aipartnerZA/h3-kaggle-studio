@@ -438,7 +438,6 @@ function renderOnboarding() {
   const payload = Object.assign({ prefix: prefixBase }, st);
   return html
     .replace('<!--H3_ONBOARDING-->', jsonForHtml(payload))
-    .replace(/(href|src)="\/(vendor|assets)\//g, (m, attr, dir) => `${attr}="${prefixBase}/${dir}/`)
     .replace(/(href|src)="\/(onboarding\.(?:js|css)|style\.css)"/g, (m, attr, f) => `${attr}="${prefixBase}/${f}"`);
 }
 
@@ -572,20 +571,6 @@ function serveFile(res, file, contentType) {
   return send(res, 200, buf, headers);
 }
 
-function vendorRoute(res, pathname) {
-  const m = pathname.match(VENDOR_ROUTE);
-  if (!m) return err(res, 404, 'Not found.');
-  const rel = decodeURIComponent(m[1]);
-  if (rel.includes('..') || rel.startsWith('/')) return err(res, 404, 'Not found.');
-  const root = path.join(publicDir, 'vendor');
-  const full = path.resolve(root, rel);
-  if (!full.startsWith(root + path.sep)) return err(res, 404, 'Not found.');
-  const type = full.endsWith('.js') ? 'application/javascript; charset=utf-8'
-    : full.endsWith('.css') ? 'text/css; charset=utf-8'
-    : full.endsWith('.svg') ? 'image/svg+xml' : 'application/octet-stream';
-  return serveFile(res, full, type);
-}
-
 function staticRoute(res, pathname) {
   const rel = pathname.slice(prefix.length).replace(/^\/+/, '') || 'index.html';
   if (rel.includes('..')) return err(res, 404, 'Not found.');
@@ -679,7 +664,6 @@ const RUN_LOG = runRoute('/log$');
 const RUN_ACTION = runRoute('/(cancel|delete)$');
 const RUN_ONE = runRoute('$');
 const ASSET_ROUTE = new RegExp('^' + escRe(prefixBase) + '/(assets/)?(app\\.js|onboarding\\.js|onboarding\\.css|style\\.css|gsap\\.min\\.js)$');
-const VENDOR_ROUTE = new RegExp('^' + escRe(prefixBase) + '/vendor/(.+)$');
 
 async function handle(req, res) {
   const u = new URL(req.url, 'http://127.0.0.1');
@@ -713,7 +697,7 @@ async function handle(req, res) {
   // ---- the gate. Server-side, ahead of every studio route. ----
   if (setupState !== 'ready' && !skipOnboarding()) {
     const isPage = method === 'GET' && (p === prefix || p === prefix + '/');
-    const isAsset = method === 'GET' && (ASSET_ROUTE.test(p) || VENDOR_ROUTE.test(p));
+    const isAsset = method === 'GET' && ASSET_ROUTE.test(p);
     if (!isPage && !isAsset) {
       return json(res, 409, {
         error: 'Setup is not complete.',
@@ -771,7 +755,6 @@ async function handle(req, res) {
   }
 
   if (method === 'GET' && (p === prefix || p === prefix + '/')) return staticRoute(res, p);
-  if (method === 'GET' && VENDOR_ROUTE.test(p)) return vendorRoute(res, p);
   if (method === 'GET' && ASSET_ROUTE.test(p)) return staticRoute(res, p);
 
   return err(res, 404, 'Not found.');

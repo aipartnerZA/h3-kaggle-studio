@@ -1,17 +1,23 @@
 'use strict';
 
 /* First-run setup. The server owns the state; this file only renders it and posts to it.
-   Nothing here decides whether the studio may be used — every studio route is gated server-side. */
+   Nothing here decides whether the studio may be used — every studio route is gated server-side.
+   There is one legal pane: the terms, scroll-gated. It cannot be skipped by swiping. */
 
 (function () {
   var boot = {};
   try {
     var t = document.getElementById('ob-bootstrap');
-    boot = JSON.parse(t ? t.textContent : '{}') || {};
+    // A <template>'s text lives in its content fragment, not in textContent.
+    var raw = t ? (t.content ? t.content.textContent : t.textContent) : '';
+    boot = JSON.parse(raw || '{}') || {};
   } catch (e) { boot = {}; }
 
   var PREFIX = (boot.prefix || '').replace(/\/$/, '');
   var api = function (p) { return PREFIX + p; };
+
+  // How close to the bottom counts as "read to the end", in CSS pixels.
+  var END_TOLERANCE = 2;
 
   var STRINGS = {
     rejected: 'That token did not work. Kaggle answered "authentication required" — the token may be incomplete or already revoked. Copy the whole token again from kaggle.com/settings/api.',
@@ -21,9 +27,8 @@
   };
 
   var $ = function (id) { return document.getElementById(id); };
-  var swiper = null;
-  var licence = { accepted: false, tos_ack: false, territory: null };
-  var blocked = false;
+  var PAGES = 3;
+  var pane = 0;
 
   function steps(index) {
     var items = document.querySelectorAll('.ob-step');
@@ -35,18 +40,14 @@
   }
 
   function go(index) {
-    if (!swiper) return;
-    swiper.slideTo(index);
-  }
-
-  function applyPolicies(index) {
-    // Panes 2 and 3 (index 1 and 2) may only be advanced by their own button: a swipe would be a bypass.
-    var locked = (index === 1 || index === 2);
-    if (swiper) {
-      swiper.allowTouchMove = !locked;
-      swiper.keyboard.enabled = true;
+    pane = Math.max(0, Math.min(PAGES - 1, index));
+    var panes = document.querySelectorAll('.ob-pane');
+    for (var i = 0; i < panes.length; i++) panes[i].hidden = (i !== pane);
+    steps(pane);
+    if (pane === 1) {
+      var field = $('token');
+      if (field) field.focus();
     }
-    steps(index);
   }
 
   function post(url, body) {
@@ -72,111 +73,98 @@
       line += '.';
     }
     $('ready-line').textContent = line;
-    go(5);
+    go(2);
   }
 
-  // ---- pane 2: licence ------------------------------------------------------
-  function licenceValid() {
-    return $('lic-a').checked && $('lic-b').checked && licence.territory === 'applicable';
+  // ---- pane 1: the terms, read to the end -----------------------------------
+  // The button stays disabled until the box has been scrolled to its bottom. No checkbox, no swipe:
+  // the only way forward is to read it.
+  function termsRead() {
+    var box = $('ob-terms');
+    if (!box) return true;
+    // Content shorter than the box (a very tall window) has nothing left to scroll.
+    if (box.scrollHeight - box.clientHeight <= END_TOLERANCE) return true;
+    return box.scrollTop + box.clientHeight >= box.scrollHeight - END_TOLERANCE;
   }
 
-  function syncLicence() {
-    var radio = document.querySelector('input[name="territory"]:checked');
-    licence.territory = radio ? radio.value : null;
+  function syncTerms() {
+    var box = $('ob-terms');
+    var next = $('ob-continue');
+    var hint = $('ob-hint');
+    if (!box || !next) return;
+    var read = termsRead();
+    if (!next.classList.contains('is-busy')) next.disabled = !read;
+    box.classList.toggle('is-read', read);
+    if (hint) hint.hidden = read;
+  }
 
-    var warn = $('territory-blocked');
-    if (licence.territory === 'excluded') {
-      blocked = true;
-      warn.hidden = false;
-      $('lic-next').disabled = true;
-    } else {
-      if (!blocked) warn.hidden = true;
-      $('lic-next').disabled = !licenceValid();
+  function showBlocked() {
+    var blocked = $('ob-blocked');
+    var actions = $('ob-terms-actions');
+    var box = $('ob-terms');
+    if (blocked) blocked.hidden = false;
+    if (actions) actions.hidden = true;
+    if (box) box.hidden = true;
+    var hint = $('ob-hint');
+    if (hint) hint.hidden = true;
+  }
+
+  function bindTerms() {
+    var box = $('ob-terms');
+    var next = $('ob-continue');
+    var excluded = $('ob-excluded');
+    var err = $('ob-error');
+
+    if (box) {
+      box.addEventListener('scroll', syncTerms, { passive: true });
+      // Wheel and keyboard scrolling both land here; resize changes the box height.
+      box.addEventListener('keydown', function () { setTimeout(syncTerms, 0); });
     }
-  }
+    window.addEventListener('resize', syncTerms);
 
-  function bindPane2() {
-    ['lic-a', 'lic-b'].forEach(function (id) {
-      var el = $(id);
-      if (el) el.addEventListener('change', syncLicence);
-    });
-    var radios = document.querySelectorAll('input[name="territory"]');
-    for (var i = 0; i < radios.length; i++) radios[i].addEventListener('change', syncLicence);
-    var next = $('lic-next');
     if (next) {
       next.addEventListener('click', function () {
+        if (next.disabled) return;
+        next.classList.add('is-busy');
         next.disabled = true;
         next.textContent = 'Saving…';
-        post('/api/setup/licence', {
-          accepted: $('lic-a').checked,
-          tos_ack: $('lic-b').checked,
-          territory: licence.territory
-        }).then(function (r) {
-          next.textContent = 'I understand';
-          if (r.status === 451) {
-            blocked = true;
-            $('territory-blocked').hidden = false;
-            next.disabled = true;
-            return;
-          }
-          if (r.status !== 200) {
-            var e = $('lic-error');
-            e.hidden = false;
-            e.textContent = 'The acknowledgement could not be saved. Check that cookies and this address are not blocked, then try again.';
-            next.disabled = !licenceValid();
-            return;
-          }
-          licence.accepted = true;
-          go(2);
-        }).catch(function () {
-          next.textContent = 'I understand';
-          var e = $('lic-error');
-          e.hidden = false;
-          e.textContent = STRINGS.unreachable;
-          next.disabled = !licenceValid();
-        });
+        if (err) err.hidden = true;
+        post('/api/setup/licence', { accepted: true, tos_ack: true, territory: 'applicable' })
+          .then(function (r) {
+            next.classList.remove('is-busy');
+            next.textContent = 'Continue';
+            if (r.status === 200) { go(1); return; }
+            if (r.status === 451) { showBlocked(); return; }
+            if (err) {
+              err.hidden = false;
+              err.textContent = 'The acknowledgement could not be saved. Check that cookies and this address are not blocked, then try again.';
+            }
+            syncTerms();
+          })
+          .catch(function () {
+            next.classList.remove('is-busy');
+            next.textContent = 'Continue';
+            if (err) { err.hidden = false; err.textContent = STRINGS.unreachable; }
+            syncTerms();
+          });
+      });
+    }
+
+    // A single click declares the exclusion, so the territory answer is never given by silence.
+    if (excluded) {
+      excluded.addEventListener('click', function () {
+        excluded.disabled = true;
+        post('/api/setup/licence', { accepted: true, tos_ack: true, territory: 'excluded' })
+          .then(function () { showBlocked(); })
+          .catch(function () {
+            excluded.disabled = false;
+            if (err) { err.hidden = false; err.textContent = STRINGS.unreachable; }
+          });
       });
     }
   }
 
-  // ---- pane 3: Kaggle terms -------------------------------------------------
-  function bindPane3() {
-    var ack = $('tos-ack');
-    var next = $('tos-next');
-    if (ack && next) {
-      ack.addEventListener('change', function () { next.disabled = !ack.checked; });
-      next.addEventListener('click', function () {
-        next.disabled = true;
-        next.textContent = 'Saving…';
-        post('/api/setup/licence', {
-          accepted: $('lic-a').checked,
-          tos_ack: ack.checked,
-          territory: licence.territory
-        }).then(function (r) {
-          next.textContent = 'I understand';
-          if (r.status === 200) {
-            licence.tos_ack = true;
-            go(3);
-            return;
-          }
-          next.disabled = !ack.checked;
-          var e = $('tos-error');
-          e.hidden = false;
-          e.textContent = r.status === 451
-            ? 'This studio will not render for you in an excluded territory.'
-            : STRINGS.unreachable;
-        }).catch(function () {
-          next.textContent = 'I understand';
-          next.disabled = !ack.checked;
-          var e = $('tos-error');
-          e.hidden = false;
-          e.textContent = STRINGS.unreachable;
-        });
-      });
-    }
-  }
-
-  // ---- pane 5: credentials --------------------------------------------------
+  // ---- pane 2: credentials --------------------------------------------------
   function setBusy(on) {
     var b = $('verify');
     if (!b) return;
@@ -238,7 +226,7 @@
       });
   }
 
-  function bindPane5() {
+  function bindCredentials() {
     var form = $('cred-form');
     if (form) {
       form.addEventListener('submit', function (ev) {
@@ -281,15 +269,14 @@
       .then(function (r) { return r.json(); })
       .then(function (s) {
         if (!s) return;
-        if (s.state === 'ready' && swiper && swiper.activeIndex !== 5) showReady(s);
+        if (s.state === 'ready' && pane !== 2) showReady(s);
       })
       .catch(function () { /* the panel is usable without the poll */ });
   }
 
   function boot_() {
-    bindPane2();
-    bindPane3();
-    bindPane5();
+    bindTerms();
+    bindCredentials();
 
     var open = $('open-studio');
     if (open) {
@@ -299,52 +286,17 @@
     var mock = $('mock-flag');
     if (mock && boot.mock) mock.hidden = false;
 
-    if (window.Swiper) {
-      swiper = new window.Swiper('.ob-swiper', {
-        init: true,
-        speed: 420,
-        resistanceRatio: 0.85,
-        allowTouchMove: true,
-        simulateTouch: true,
-        touchStartPreventDefault: false,
-        a11y: { enabled: true },
-        keyboard: { enabled: true, onlyInViewport: true },
-        on: {
-          init: function () { applyPolicies(this.activeIndex); },
-          slideChange: function () { applyPolicies(this.activeIndex); }
-        }
-      });
-    } else {
-      // Without Swiper the panel still works: every pane is stacked and the buttons scroll it.
-      document.querySelector('.ob-swiper').classList.add('is-fallback');
-      steps(0);
-    }
-
-    var nexts = document.querySelectorAll('[data-next]');
-    for (var i = 0; i < nexts.length; i++) {
-      nexts[i].addEventListener('click', function () {
-        var idx = swiper ? swiper.activeIndex : 0;
-        go(idx + 1);
-      });
-    }
-    var prevs = document.querySelectorAll('[data-prev]');
-    for (var j = 0; j < prevs.length; j++) {
-      prevs[j].addEventListener('click', function () {
-        var idx = swiper ? swiper.activeIndex : 0;
-        go(Math.max(0, idx - 1));
-      });
-    }
-
     // Resume where the server says they are.
     if (boot.excluded) {
-      blocked = true;
-      var warn = $('territory-blocked');
-      if (warn) warn.hidden = false;
-      go(1);
-    } else if (boot.state === 'licence_ok') {
-      go(3);
+      go(0);
+      showBlocked();
     } else if (boot.state === 'ready') {
       showReady(boot);
+    } else if (boot.state === 'licence_ok') {
+      go(1);
+    } else {
+      go(0);
+      syncTerms();
     }
 
     setInterval(poll, 30000);
@@ -355,9 +307,4 @@
   } else {
     boot_();
   }
-
-  // Escape does nothing on purpose: there is no way out of this panel but forward.
-  document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape') ev.preventDefault();
-  }, true);
 })();

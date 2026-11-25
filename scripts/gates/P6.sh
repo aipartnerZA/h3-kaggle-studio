@@ -50,8 +50,8 @@ if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/true GIT_CONFIG_GLOBAL=/dev/null \
   ( cd "$CLONE" && MOCK_KAGGLE=1 H3UI_PORT="$PORT" H3UI_BIND=127.0.0.1 H3UI_NO_WORKER=1 \
       H3UI_KAGGLE_HOME="$KHOME" H3UI_DATA_DIR="$TMP/data" node server.js >"$TMP/srv.log" 2>&1 & echo $! > "$TMP/pid" )
   if wait_health "$PORT"; then
-    if curl -s "http://127.0.0.1:$PORT/" | grep -qF 'Render video on a free GPU'; then
-      green "the anonymous clone serves the onboarding"
+    if curl -s "http://127.0.0.1:$PORT/" | grep -qF 'By continuing, you agree to the Terms and Conditions listed below:'; then
+      green "the anonymous clone serves the terms gate"
     else
       red "the anonymous clone does not serve the onboarding"
     fi

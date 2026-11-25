@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
-# P3 — the first-run panel: full screen, six panes, real gate, no bypass in the browser.
+# P3 — the first-run panel: full screen, one terms gate read to the end, then the account, no bypass.
 source "$(cd "$(dirname "$0")" && pwd)/_lib.sh"
 
-head_l "P3.1 vendored Swiper, hashes locked"
-assert_file public/vendor/swiper-14.4.0/swiper-bundle.min.js "vendored js"
-assert_file public/vendor/swiper-14.4.0/swiper-bundle.min.css "vendored css"
-assert_file scripts/vendor.lock "the hash lock"
-if [ -f scripts/vendor.lock ]; then
-  while read -r f want _size; do
-    case "$f" in */*) ;; *) continue ;; esac
-    got=$(sha256sum "$f" 2>/dev/null | awk '{print $1}')
-    if [ "$got" = "$want" ]; then green "$(basename "$f") hash matches the lock"; else red "$(basename "$f") hash drifted from scripts/vendor.lock"; fi
-  done < scripts/vendor.lock
-fi
+head_l "P3.1 no third-party bundle is loaded or shipped"
 if grep -rqE 'cdn\.jsdelivr|unpkg\.com|cdnjs' public/*.html public/*.js public/*.css 2>/dev/null; then
   red "a CDN reference is present — assets must be self-hosted"
 else
   green "no CDN references in the served assets"
+fi
+if grep -qiE 'src="https?://' public/*.html 2>/dev/null; then
+  red "a page loads a script from another host"
+else
+  green "no page loads a script from another host"
+fi
+if [ -d "$ROOT/public/vendor" ]; then
+  red "public/vendor still exists — the panel should need no vendored bundle"
+else
+  green "no vendored third-party bundle in the tree"
 fi
 
 head_l "P3.2 the copy is in the build"
@@ -34,25 +34,34 @@ curl -s "http://127.0.0.1:$PORT/" -o "$PAGE" 2>/dev/null
 check_copy() {
   if grep -qF "$1" "$PAGE" 2>/dev/null; then green "copy present: ${1:0:48}…"; else red "copy missing: ${1:0:48}…"; fi
 }
-check_copy "Render video on a free GPU"
-check_copy "Before you render: the model licence"
+check_copy "By continuing, you agree to the Terms and Conditions listed below:"
+check_copy "MiniMax H3 Community Licence Agreement"
 check_copy "European Union, the United Kingdom"
 check_copy "South Korea"
 check_copy "Powered by MiniMax H3"
-check_copy "Kaggle's rules"
 check_copy "personal, non-commercial use"
 check_copy "termination of your account"
-check_copy "Get your Kaggle token"
-check_copy "Connect your account"
+check_copy "Connect your Kaggle account"
+check_copy "kaggle.json"
 check_copy "Not affiliated with Kaggle or MiniMax"
 
 head_l "P3.3 the gate cannot be walked around in the browser"
-if grep -qiE 'swiper' "$PAGE"; then green "the page loads Swiper from the vendored path"; else red "no Swiper on the setup page"; fi
 if grep -qiE 'role="dialog"|aria-modal' "$PAGE"; then green "the panel is declared as a modal dialog"; else red "no aria-modal / role=dialog"; fi
-if grep -qiE 'allowTouchMove' "$PAGE" || grep -qiE 'allowTouchMove' "$WORK/public"/onboarding.js 2>/dev/null; then
-  green "touch movement is controlled per pane"
+if grep -qE 'id="ob-continue"[^>]*disabled' "$PAGE"; then
+  green "the continue button is disabled in the served markup"
 else
-  red "no allowTouchMove control (the licence pane can be swiped past)"
+  red "the continue button is not disabled in the markup (the terms could be skipped)"
+fi
+if grep -qE 'scrollTop' "$WORK/public/onboarding.js" 2>/dev/null \
+   && grep -qE 'scrollHeight' "$WORK/public/onboarding.js" 2>/dev/null; then
+  green "the button opens on a bottom-of-box test, not a timer or a checkbox"
+else
+  red "onboarding.js has no bottom-of-box scroll test"
+fi
+if grep -qiE "addEventListener\('scroll'" "$WORK/public/onboarding.js" 2>/dev/null; then
+  green "the scroll event is what re-enables it"
+else
+  red "nothing listens for the terms being scrolled"
 fi
 if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/api/state")" = "409" ]; then
   green "the studio API still refuses before setup"

@@ -33,9 +33,9 @@ Before anything is rendered, `lib/setup.js` owns the state machine and `server.j
 the route table:
 
 ```
-new ──accept licence + territory + Kaggle ToS──> licence_ok ──probe ok──> ready
+new ──terms read to the end, then Continue──> licence_ok ──probe ok──> ready
  │                                                  │
- └──territory = excluded──> territory_blocked        └──probe fails──> token_rejected | forbidden
+ └──declares an excluded territory──> territory_blocked   └──probe fails──> token_rejected | forbidden
                                                                        | quota_empty | unreachable
                                                                        | old_cli
 ```
@@ -44,7 +44,7 @@ new ──accept licence + territory + Kaggle ToS──> licence_ok ──probe 
 The token is written by `lib/kaggle-auth.js` to `$KAGGLE_HOME/access_token`, 0600, inside a 0700
 directory, via a temp file and `rename`. Nothing reads it back out: the probe only asks the CLI.
 
-While the state is not `ready`, every route except `/`, `/assets/*`, `/vendor/*`, `/api/setup*` and
+While the state is not `ready`, every route except `/`, `/assets/*`, `/api/setup*` and
 `/api/health` answers `409`. This is the licence's requirement (section V.2), so it is server-side and
 it is not a splash screen.
 

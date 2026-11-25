@@ -59,7 +59,7 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9199/api/state)
           echo "GET /api/state before setup -> $code"
           test "$code" = "409"
-          curl -s http://127.0.0.1:9199/ | grep -q 'Render video on a free GPU'
+          curl -s http://127.0.0.1:9199/ | grep -q 'By continuing, you agree to the Terms and Conditions listed below:'
           kill $SRV
 
   shellcheck:

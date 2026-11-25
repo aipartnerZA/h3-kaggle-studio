@@ -1,4 +1,5 @@
-/* First-run setup. Full-screen panel over the studio. Tokens come from style.css. */
+/* First-run setup. Full-screen panel over the studio. Tokens come from style.css.
+   One legal pane: the terms, which scroll inside their own box and gate the button. */
 
 .ob-body {
   margin: 0;
@@ -37,7 +38,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 26px 14px;
+  padding: 16px 26px 13px;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, var(--surface-2), transparent);
 }
@@ -59,24 +60,22 @@
 .ob-step.is-done { background: var(--mint-ink); }
 .ob-step.is-current { background: var(--accent); width: 40px; }
 
-/* ---------- slides ---------- */
-.ob-swiper { flex: 1 1 auto; min-height: 0; width: 100%; }
-.ob-swiper .swiper-slide { overflow-y: auto; overscroll-behavior: contain; }
-
-.ob-slide {
-  padding: clamp(22px, 3.4vw, 38px) clamp(20px, 3.6vw, 40px) 26px;
+/* ---------- panes ---------- */
+.ob-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(20px, 3vw, 30px) clamp(20px, 3.6vw, 40px) 24px;
   box-sizing: border-box;
 }
-
-.ob-eyebrow {
-  margin: 0 0 10px;
-  font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-  color: var(--accent);
-}
+/* The terms pane does not scroll as a whole: the box inside it does, so the button cannot
+   drift out of view while the sentence above it is being read. */
+.ob-pane[data-pane="0"] { overflow: hidden; display: flex; flex-direction: column; }
 
 .ob-title {
-  margin: 0 0 14px;
-  font-size: clamp(24px, 3.2vw, 32px);
+  margin: 0 0 10px;
+  font-size: clamp(22px, 3vw, 30px);
   line-height: 1.16;
   letter-spacing: -.025em;
   font-weight: 760;
@@ -87,11 +86,10 @@
 .ob-lead {
   margin: 0 0 14px;
   max-width: 62ch;
-  font-size: 15.5px;
-  line-height: 1.66;
+  font-size: 15px;
+  line-height: 1.62;
   color: var(--ink-2);
 }
-.ob-lead-small { font-size: 14.5px; }
 
 .ob-note {
   margin: 16px 0 0;
@@ -101,7 +99,7 @@
   opacity: .92;
 }
 
-.ob-slide code {
+.ob-pane code {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: .92em;
   padding: 2px 6px;
@@ -112,91 +110,66 @@
   word-break: break-word;
 }
 
-.ob-slide a { color: var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 2px; }
+.ob-pane a { color: var(--accent); text-decoration-thickness: 1.5px; text-underline-offset: 2px; }
 
-/* ---------- facts ---------- */
-.ob-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  margin: 20px 0 4px;
-  padding: 0;
-  list-style: none;
-}
-.ob-facts li {
-  padding: 14px 16px;
-  border-radius: var(--r-ctl);
-  background: var(--mint-soft);
-  color: var(--mint-ink);
-  border: 1px solid color-mix(in srgb, var(--mint-ink) 16%, transparent);
-}
-.ob-facts strong { display: block; font-size: 14.5px; font-weight: 750; letter-spacing: -.01em; }
-.ob-facts span { display: block; margin-top: 3px; font-size: 12.5px; opacity: .85; }
-
-/* ---------- clauses ---------- */
-.ob-clauses { margin: 4px 0 16px; padding: 0; list-style: none; }
-.ob-clauses li {
-  position: relative;
-  padding: 0 0 0 22px;
-  margin: 0 0 11px;
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--ink-2);
-}
-.ob-clauses li::before {
-  content: "";
-  position: absolute; left: 2px; top: .55em;
-  width: 8px; height: 8px; border-radius: 3px;
-  background: var(--coral);
-  box-shadow: 0 0 0 3px var(--coral-soft);
-}
-
-/* ---------- quote ---------- */
-.ob-quote {
-  margin: 6px 0 16px;
-  padding: 16px 18px;
+/* ---------- the agreement line ---------- */
+.ob-agree {
+  margin: 0 0 12px;
   font-size: 14.5px;
-  line-height: 1.62;
-  color: var(--sun-ink);
-  background: var(--sun-soft);
-  border-left: 3px solid var(--sun);
-  border-radius: 4px var(--r-ctl) var(--r-ctl) 4px;
-}
-
-/* ---------- form bits ---------- */
-.ob-fieldset { margin: 18px 0 8px; padding: 0; border: 0; }
-.ob-legend { padding: 0; margin-bottom: 10px; font-size: 13.5px; font-weight: 700; color: var(--ink); }
-
-.ob-radio {
-  display: flex; gap: 11px; align-items: flex-start;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  font-size: 14.5px; line-height: 1.5;
-  color: var(--ink-2);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-ctl);
-  cursor: pointer;
-  transition: border-color .18s ease, background .18s ease;
-}
-.ob-radio:hover { border-color: var(--line-strong); }
-.ob-radio input { margin: 3px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
-.ob-radio:has(input:checked) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  line-height: 1.5;
+  font-weight: 650;
   color: var(--ink);
 }
 
-.ob-check {
-  display: flex; gap: 11px; align-items: flex-start;
-  margin: 12px 0 0;
-  font-size: 14.5px; line-height: 1.55;
-  color: var(--ink-2);
-  cursor: pointer;
+/* ---------- the terms box ---------- */
+.ob-terms {
+  flex: 1 1 auto;
+  min-height: 140px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 18px 6px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  outline: none;
+  scrollbar-width: thin;
 }
-.ob-check input { margin: 3px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
-.ob-check:has(input:checked) { color: var(--ink); }
+.ob-terms:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
+.ob-terms-h {
+  margin: 14px 0 6px;
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.ob-terms > .ob-terms-h:first-child { margin-top: 10px; }
+
+.ob-terms p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.62;
+  color: var(--ink-2);
+}
+
+.ob-terms-fine {
+  font-size: 12.5px !important;
+  opacity: .8;
+  padding-bottom: 6px;
+}
+
+.ob-hint {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  opacity: .85;
+}
+
+/* ---------- form bits ---------- */
+.ob-form { margin: 0; }
 .ob-label { display: block; margin: 4px 0 8px; font-size: 13px; font-weight: 700; color: var(--ink); }
 
 .ob-input-row { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -252,9 +225,11 @@
 .ob-actions {
   display: flex;
   gap: 10px;
+  align-items: center;
   justify-content: flex-end;
-  margin-top: 24px;
-  padding-top: 4px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  flex: 0 0 auto;
 }
 
 .ob-btn {
@@ -276,8 +251,22 @@
 .ob-btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
 .ob-btn-primary:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
 
-.ob-btn-ghost { background: transparent; color: var(--ink-2); border-color: var(--line-strong); }
-.ob-btn-ghost:hover { color: var(--ink); border-color: var(--ink-2); }
+/* The exclusion declaration: present, quiet, one click. */
+.ob-btn-link {
+  margin-right: auto;
+  padding: 8px 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  box-shadow: none;
+}
+.ob-btn-link:hover:not(:disabled) { color: var(--ink); }
+.ob-btn-link:disabled { opacity: .5; cursor: default; }
 
 .ob-btn.is-busy { position: relative; color: transparent; }
 .ob-btn.is-busy::after {
@@ -324,16 +313,19 @@
 
 /* ---------- small screens ---------- */
 @media (max-width: 620px) {
-  .ob-panel { max-height: none; min-height: calc(100svh - 16px); }
-  .ob-head { padding: 14px 18px 12px; }
+  .ob-panel { max-height: calc(100svh - 12px); min-height: calc(100svh - 12px); }
+  .ob-head { padding: 13px 18px 11px; }
   .ob-foot { padding: 10px 18px 12px; }
-  .ob-actions { flex-direction: column-reverse; }
+  .ob-pane { padding: 18px 18px 18px; }
+  .ob-terms { min-height: 120px; padding-right: 14px; }
+  .ob-actions { flex-direction: column-reverse; align-items: stretch; }
   .ob-btn { width: 100%; }
+  .ob-btn-link { margin: 2px 0 0; text-align: center; }
   .ob-input-row .ob-btn { width: 100%; }
 }
 
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
-  .ob-swapper, .ob-step, .ob-btn, .ob-drop { transition: none !important; }
+  .ob-step, .ob-btn, .ob-drop { transition: none !important; }
   .ob-btn.is-busy::after { animation-duration: 1.6s; }
 }

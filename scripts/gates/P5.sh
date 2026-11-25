@@ -60,8 +60,8 @@ PORT=$(free_port); KHOME=$(mktemp -d)
 ( cd "$FRESH" && MOCK_KAGGLE=1 H3UI_PORT="$PORT" H3UI_BIND=127.0.0.1 H3UI_NO_WORKER=1 \
   H3UI_KAGGLE_HOME="$KHOME" node server.js >srv.log 2>&1 & echo $! > srv.pid )
 if wait_health "$PORT"; then
-  if curl -s "http://127.0.0.1:$PORT/" | grep -qF 'Render video on a free GPU'; then
-    green "the clone serves the onboarding on a clean machine"
+  if curl -s "http://127.0.0.1:$PORT/" | grep -qF 'By continuing, you agree to the Terms and Conditions listed below:'; then
+    green "the clone serves the terms gate on a clean machine"
   else
     red "the clone does not serve the onboarding"
   fi
