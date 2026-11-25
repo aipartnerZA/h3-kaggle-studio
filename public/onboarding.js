@@ -137,7 +137,9 @@
             if (r.status === 451) { showBlocked(); return; }
             if (err) {
               err.hidden = false;
-              err.textContent = 'The acknowledgement could not be saved. Check that cookies and this address are not blocked, then try again.';
+              // The server says exactly why it refused; repeating it is the only honest message.
+              var why = r.body && r.body.error ? String(r.body.error) : 'HTTP ' + r.status + '.';
+              err.textContent = 'The terms were not saved. ' + why;
             }
             syncTerms();
           })
@@ -155,7 +157,15 @@
       excluded.addEventListener('click', function () {
         excluded.disabled = true;
         post('/api/setup/licence', { accepted: true, tos_ack: true, territory: 'excluded' })
-          .then(function () { showBlocked(); })
+          .then(function (r) {
+            if (r.status === 451 || r.status === 200) { showBlocked(); return; }
+            excluded.disabled = false;
+            if (err) {
+              err.hidden = false;
+              var why = r.body && r.body.error ? String(r.body.error) : 'HTTP ' + r.status + '.';
+              err.textContent = 'The studio refused that. ' + why;
+            }
+          })
           .catch(function () {
             excluded.disabled = false;
             if (err) { err.hidden = false; err.textContent = STRINGS.unreachable; }

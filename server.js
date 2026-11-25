@@ -673,6 +673,14 @@ async function handle(req, res) {
 
   if (prefixBase && p !== prefixBase && !p.startsWith(prefixBase + '/')) return err(res, 404, 'Not found.');
 
+  // Browsers ask for a favicon unprompted, and at the site root even when the studio
+  // is mounted under a prefix. Answering it here keeps the setup gate from handing a
+  // 409 "Setup is not complete" to a request nobody made on purpose. The pages also
+  // carry an inline icon, so this is the fallback rather than the normal path.
+  if (method === 'GET' && (p === '/favicon.ico' || p === prefixBase + '/favicon.ico')) {
+    return send(res, 204, null, { 'Cache-Control': 'public, max-age=86400' });
+  }
+
   const setupState = setup.state(base);
 
   // ---- setup API: open while the studio is not ready ----

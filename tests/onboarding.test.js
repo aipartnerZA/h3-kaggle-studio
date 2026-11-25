@@ -38,6 +38,26 @@ function request(port, method, pathname, body) {
   });
 }
 
+// Nothing injected: the caller says exactly what a browser would send (Origin, Host, proto).
+function rawRequest(port, method, pathname, body, extra) {
+  return new Promise((resolve, reject) => {
+    const data = body == null ? null : JSON.stringify(body);
+    const headers = Object.assign({}, extra || {});
+    if (data) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = Buffer.byteLength(data);
+    }
+    const req = http.request({ host: '127.0.0.1', port, method, path: pathname, headers }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks).toString() }));
+    });
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+
 function startGated(env) {
   // No H3UI_SKIP_ONBOARDING here: this suite is about the gate itself.
   // Keep the credential home inside the fixture: a token write must never touch this machine's ~/.kaggle.
@@ -75,6 +95,11 @@ test('the setup page carries one terms gate, and the button starts disabled', as
   // The gate must not be a checkbox: no acknowledgement input on the setup page.
   assert.doesNotMatch(page.body, /<input[^>]+type="checkbox"/, 'a checkbox came back');
   assert.doesNotMatch(page.body, /swiper/i, 'the setup page still depends on a vendored slider');
+  assert.match(page.body, /rel="icon" href="data:image\/svg\+xml/, 'the page does not carry its own icon');
+
+  // A browser asks for a favicon unprompted; the gate must not answer it with a 409.
+  const icon = await request(port, 'GET', '/favicon.ico');
+  assert.equal(icon.status, 204, 'the favicon is answered inside the gate');
 
   const state = await request(port, 'GET', '/api/state');
   assert.equal(state.status, 409, 'the studio should refuse before setup is complete');
@@ -133,4 +158,52 @@ test('a partial acknowledgement is refused, and an excluded territory is termina
   const cred = await request(port, 'POST', '/api/setup/credentials', { token: 'anything' });
   assert.notEqual(JSON.parse((await request(port, 'GET', '/api/setup')).body).state, 'ready');
   assert.ok([200, 403, 451].includes(cred.status));
+});
+
+test('a foreign origin cannot answer the terms, and the refusal names it', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-origin-'));
+  const port = await freePort();
+  const child = await startGated({ H3UI_PORT: String(port), H3UI_BASE: root });
+  t.after(() => child.kill());
+
+  const payload = { accepted: true, tos_ack: true, territory: 'applicable' };
+
+  // A page on someone else's site must not be able to read the licence for you.
+  const foreign = await rawRequest(port, 'POST', '/api/setup/licence', payload, {
+    Host: '127.0.0.1:' + port, Origin: 'https://evil.example',
+  });
+  assert.equal(foreign.status, 403, 'a cross-site write was accepted');
+  assert.match(JSON.parse(foreign.body).error, /evil\.example/, 'the refusal does not name the origin it saw');
+  assert.equal(JSON.parse((await request(port, 'GET', '/api/setup')).body).state, 'new');
+
+  // No Origin at all is refused rather than assumed to be local.
+  const bare = await rawRequest(port, 'POST', '/api/setup/licence', payload);
+  assert.equal(bare.status, 403);
+  assert.equal(JSON.parse((await request(port, 'GET', '/api/setup')).body).state, 'new');
+});
+
+test('the address you browsed is same-origin, whether LAN IP or proxy hostname', async (t) => {
+  const lanRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-lan-'));
+  const lanPort = await freePort();
+  const lanChild = await startGated({ H3UI_PORT: String(lanPort), H3UI_BASE: lanRoot });
+  t.after(() => lanChild.kill());
+
+  const payload = { accepted: true, tos_ack: true, territory: 'applicable' };
+
+  // Opened at http://192.168.1.50:PORT — Host and Origin agree, so this is same-origin.
+  const lan = await rawRequest(lanPort, 'POST', '/api/setup/licence', payload, {
+    Host: '192.168.1.50:' + lanPort, Origin: 'http://192.168.1.50:' + lanPort,
+  });
+  assert.equal(lan.status, 200, 'a write from the address the page was served on was refused');
+
+  // Behind a TLS proxy: Origin is https with no port, Host has no port, proto is forwarded.
+  const proxyRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-proxy-'));
+  const proxyPort = await freePort();
+  const proxyChild = await startGated({ H3UI_PORT: String(proxyPort), H3UI_BASE: proxyRoot });
+  t.after(() => proxyChild.kill());
+
+  const proxied = await rawRequest(proxyPort, 'POST', '/api/setup/licence', payload, {
+    Host: 'studio.example', Origin: 'https://studio.example', 'X-Forwarded-Proto': 'https',
+  });
+  assert.equal(proxied.status, 200, 'a write through the configured proxy was refused');
 });

@@ -74,10 +74,26 @@ someone other than you can reach it. Skipping the setup also does not skip your 
 `MOCK_KAGGLE=1` renders a placeholder mp4 locally and never contacts Kaggle. It is loopback-only, it is
 bannered in the UI, and it is for working on the interface without spending quota.
 
+**403 when I press Continue on the terms**
+Writes are same-origin only: the `Origin` the browser sends must be the address you actually reached
+the studio on. `127.0.0.1`, `localhost`, `[::1]`, a LAN IP and a hostname you browsed are all accepted
+— the check compares the request's `Origin` against its `Host` (using `X-Forwarded-Proto` behind a TLS
+proxy), and an `allowed_origins` entry in `config.json` always wins. A 403 here means the page and the
+write disagree about the address; the panel prints the exact origin the server saw, so read that
+line. If your proxy rewrites `Host`, or strips `Origin`, add the public origin to `allowed_origins`.
+A missing `Origin` header is also refused — nothing but a non-browser client omits it.
+
+**`/favicon.ico` returned 409 in the console**
+That was the setup gate answering a request the browser makes unprompted. It now returns 204, and the
+pages carry an inline icon, so nothing is requested at all.
+
 **Behind nginx**
-Set `H3UI_PREFIX=/h3`, proxy `/h3/` to `127.0.0.1:8804`, and add your public origin to
-`allowed_origins` in `config.json` — writes are origin-checked and will 403 otherwise. WebSocket is not
-used; long polls are plain HTTP. Put basic auth or mTLS in front; the app has no login of its own.
+Set `H3UI_PREFIX=/h3`, proxy `/h3/` to `127.0.0.1:8804`, and keep `proxy_set_header Host $host` and
+`X-Forwarded-Proto $scheme`: with those the origin check passes as-is. If your config rewrites `Host`,
+add your public origin to `allowed_origins` in `config.json` — writes are origin-checked and will 403
+otherwise. WebSocket is not used; long polls are plain HTTP. Put basic auth or mTLS in front; the app
+has no login of its own. Note that same-origin checks do not stop DNS rebinding — the defence there is
+that the studio binds loopback by default and, when exposed, sits behind a proxy that authenticates.
 
 ## Legal, not technical
 
