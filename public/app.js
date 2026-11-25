@@ -106,6 +106,12 @@
     const raw = bootEl && bootEl.content ? bootEl.content.textContent : (bootEl ? bootEl.textContent : '');
     board = JSON.parse(raw || '{}');
   } catch (e) { board = {}; }
+
+  // Every write carries the token this page was rendered with. Behind a proxy that
+  // rewrote Host, an Origin match alone cannot prove the write came from here.
+  function writeHeaders(extra) {
+    return Object.assign({ 'X-Setup-CSRF': (board && board.csrf) || '' }, extra || {});
+  }
   board.config = board.config || {};
   const cfg = board.config;
   const MIN = Number(cfg.seconds_min) || 6;
@@ -633,7 +639,7 @@
   async function removeRun(tag) {
     if (!window.confirm(`Delete ${tag} and its clips from this server?`)) return;
     try {
-      const r = await fetch(`${PREFIX}/api/runs/${encodeURIComponent(tag)}/delete`, { method: 'POST' });
+      const r = await fetch(`${PREFIX}/api/runs/${encodeURIComponent(tag)}/delete`, { method: 'POST', headers: writeHeaders() });
       if (!r.ok) throw new Error('delete refused');
       showHistoryNote(t('deleted'));
       await pollNow();
@@ -804,7 +810,7 @@
     let r, data;
     try {
       r = await fetch(PREFIX + '/api/submissions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: writeHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(payload),
       });
       data = await r.json().catch(() => ({}));
@@ -833,7 +839,7 @@
     if (!window.confirm(t('cancel_confirm'))) return;
     try {
       const r = await fetch(`${PREFIX}/api/runs/${encodeURIComponent(board.active.tag)}/cancel`,
-        { method: 'POST' });
+        { method: 'POST', headers: writeHeaders() });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'cancel refused');
       board.active = null;
       showFormError('Run cancelled before the push.');

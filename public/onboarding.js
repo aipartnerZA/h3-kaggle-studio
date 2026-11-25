@@ -53,7 +53,9 @@
   function post(url, body) {
     return fetch(api(url), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // The token proves this write came from the page the studio rendered; behind a
+      // proxy that rewrote Host, the Origin header alone cannot be trusted to.
+      headers: { 'Content-Type': 'application/json', 'X-Setup-CSRF': boot.csrf || '' },
       credentials: 'same-origin',
       body: JSON.stringify(body || {})
     }).then(function (r) {
@@ -222,7 +224,12 @@
     var fd = new FormData();
     fd.append('file', file, file.name || 'kaggle.json');
     setBusy(true);
-    fetch(api('/api/setup/credentials'), { method: 'POST', body: fd, credentials: 'same-origin' })
+    fetch(api('/api/setup/credentials'), {
+      method: 'POST',
+      headers: { 'X-Setup-CSRF': boot.csrf || '' },
+      body: fd,
+      credentials: 'same-origin'
+    })
       .then(function (r) {
         return r.json().catch(function () { return {}; }).then(function (j) {
           setBusy(false);

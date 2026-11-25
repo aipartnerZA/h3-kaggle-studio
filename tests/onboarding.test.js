@@ -249,3 +249,42 @@ test('the refusal names the host the studio was reached on, not just the origin'
   assert.match(error, /elsewhere\.example/, 'the refusal does not name the origin it saw');
   assert.match(error, /host studio\.example/, 'the refusal does not name the address the studio was reached on');
 });
+
+test('a proxy that rewrote Host cannot stop the gate: the page token is the proof', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-csrf-'));
+  const port = await freePort();
+  const child = await startGated({ H3UI_PORT: String(port), H3UI_BASE: root });
+  t.after(() => child.kill());
+
+  const payload = { accepted: true, tos_ack: true, territory: 'applicable' };
+
+  // The panel is rendered with the token; GET /api/setup reports the same one.
+  const page = await rawRequest(port, 'GET', '/', null, { Host: '127.0.0.1:' + port });
+  const token = /"csrf":"([a-f0-9]{32,})"/.exec(page.body);
+  assert.ok(token, 'the gate page does not carry a csrf token');
+  const boot = JSON.parse((await request(port, 'GET', '/api/setup')).body);
+  assert.equal(boot.csrf, token[1], 'the page and the API disagree on the token');
+
+  // The browser's real address, while the proxy upstreams to loopback: Origin can never
+  // match Host here, so only the token can prove the write came from our own page.
+  const rewritten = {
+    Host: '127.0.0.1:' + port, Origin: 'https://8804-preview.example', 'X-Setup-CSRF': token[1],
+  };
+
+  // Without the token the same shape is refused, and the state does not move.
+  const hostile = await rawRequest(port, 'POST', '/api/setup/licence', payload, {
+    Host: rewritten.Host, Origin: rewritten.Origin,
+  });
+  assert.equal(hostile.status, 403, 'a write with neither token nor matching origin was accepted');
+  assert.equal(JSON.parse((await request(port, 'GET', '/api/setup')).body).state, 'new');
+
+  const honest = await rawRequest(port, 'POST', '/api/setup/licence', payload, rewritten);
+  assert.equal(honest.status, 200, 'the token from the rendered page did not unlock the write');
+  assert.equal(JSON.parse((await request(port, 'GET', '/api/setup')).body).state, 'licence_ok');
+
+  // A token that is not the one this process minted is no better than none.
+  const wrong = await rawRequest(port, 'POST', '/api/setup/credentials', { token: 'x' }, {
+    Host: '127.0.0.1:' + port, Origin: 'https://8804-preview.example', 'X-Setup-CSRF': 'f'.repeat(48),
+  });
+  assert.equal(wrong.status, 403);
+});

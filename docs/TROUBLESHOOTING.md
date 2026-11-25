@@ -75,13 +75,23 @@ someone other than you can reach it. Skipping the setup also does not skip your 
 bannered in the UI, and it is for working on the interface without spending quota.
 
 **403 when I press Continue on the terms**
-Writes are same-origin only: the `Origin` the browser sends must be the address you actually reached
-the studio on. `127.0.0.1`, `localhost`, `[::1]`, a LAN IP and a hostname you browsed are all accepted
-— the check compares the request's `Origin` against its `Host` (using `X-Forwarded-Proto` behind a TLS
-proxy), and an `allowed_origins` entry in `config.json` always wins. A 403 here means the page and the
-write disagree about the address; the panel prints the exact origin the server saw, so read that
-line. If your proxy rewrites `Host`, or strips `Origin`, add the public origin to `allowed_origins`.
-A missing `Origin` header is also refused — nothing but a non-browser client omits it.
+Every write is checked twice, and either check passing is enough:
+
+1. **The page token.** The gate (and the studio) is rendered with a random token for that server run;
+the page posts it back in `X-Setup-CSRF`, and the server compares it to its own. Only a page this
+server rendered can read the token, and a page on another site cannot set that header (there is no
+CORS approval here, so the browser refuses the preflight). This is what makes the studio work behind
+a proxy that rewrites `Host` — a case where the `Origin` header can never match the `Host` header.
+A token from a previous run is refused; reload the page.
+2. **Same-origin.** With no token (a deliberate `curl`), the `Origin` must name the address you
+reached the studio on. `127.0.0.1`, `localhost`, `[::1]`, a LAN IP and a hostname you browsed are all
+accepted: the check compares `Origin` against `Host` and any `X-Forwarded-Host`, plus
+`X-Forwarded-Proto`. Ports are compared only when they are knowable — a proxy that terminates TLS
+but forwards no proto is treated as host-equal. An `allowed_origins` entry in `config.json` always
+wins. The panel prints the exact origin and host the server saw, so read that line before changing
+anything.
+
+A missing `Origin` header with no token is refused — nothing but a non-browser client omits both.
 
 **`/favicon.ico` returned 409 in the console**
 That was the setup gate answering a request the browser makes unprompted. It now returns 204, and the

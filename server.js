@@ -8,6 +8,16 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// Setup writes from the page the studio served, whatever the transport did to the
+// request on the way. A preview proxy can rewrite Host or drop X-Forwarded-Proto,
+// which leaves an honest same-origin write indistinguishable from a hostile one by
+// headers alone — and the browser's Origin is the one thing that cannot be faked.
+// So the page the studio rendered carries a per-process token: only that page can
+// read it, and a cross-site fetch cannot set the header (this server offers no CORS
+// approval, so the browser refuses the preflight). When the token is absent the
+// Origin check still applies, so a deliberate curl on loopback keeps working.
+const SETUP_CSRF = crypto.randomBytes(24).toString('hex');
+
 const store = require('./lib/store');
 const cost = require('./lib/cost');
 const auth = require('./lib/auth');
@@ -120,6 +130,10 @@ function setupJson() {
   const body = setup.publicState(base);
   body.step = setup.stepFor(body.state);
   body.mock = mockBound();
+  // The panel posts this back on every setup write. Not a secret worth guarding: it
+  // proves the request came from a page this server rendered, and it rotates with the
+  // process, so it is useless to anyone who never loaded the gate.
+  body.csrf = SETUP_CSRF;
   if (body.state === 'ready') {
     body.username = (lastProbe && lastProbe.username) || body.username || null;
     body.quota = lastProbe ? lastProbe.quota : (quota(true) ? {
@@ -134,8 +148,18 @@ function jsonBody(raw) {
   return JSON.parse(text || '{}');
 }
 
+// One rule for every write: a page this server rendered carries the process token and
+// may write; anything else must be same-origin by Origin. The token exists because a
+// preview proxy can rewrite Host or drop X-Forwarded-Proto, which leaves an honest
+// same-origin write indistinguishable from a hostile one by headers alone.
+function pageWrite(req) {
+  const token = String(req.headers['x-setup-csrf'] || '');
+  if (token && token === SETUP_CSRF) return { ok: true };
+  return auth.checkOrigin(req, config);
+}
+
 async function readJsonPost(req, res) {
-  const origin = auth.checkOrigin(req, config);
+  const origin = pageWrite(req);
   if (!origin.ok) { err(res, origin.status, origin.error); return null; }
   let raw;
   try {
@@ -182,7 +206,7 @@ const REASON_TEXT = {
 };
 
 async function postCredentials(req, res) {
-  const origin = auth.checkOrigin(req, config);
+  const origin = pageWrite(req);
   if (!origin.ok) return err(res, origin.status, origin.error);
 
   let raw;
@@ -234,7 +258,7 @@ async function postCredentials(req, res) {
 }
 
 function deleteCredentials(req, res) {
-  const origin = auth.checkOrigin(req, config);
+  const origin = pageWrite(req);
   if (!origin.ok) return err(res, origin.status, origin.error);
   kaggleAuth.removeCredentials(config);
   setup.clearCredential(base);
@@ -320,6 +344,9 @@ function boardState() {
   return {
     ok: true,
     version: VERSION,
+    // Every write from this page carries it: the studio must work behind a proxy that
+    // rewrote Host, where an Origin comparison alone cannot tell friend from stranger.
+    csrf: SETUP_CSRF,
     server_time: new Date().toISOString(),
     active: live,
     runs: store.listRunTags(base).reverse().slice(0, 20).map(runSummary),
@@ -476,7 +503,7 @@ function makeTag() {
 let lastAcceptedAt = 0;
 
 async function postSubmission(req, res) {
-  const origin = auth.checkOrigin(req, config);
+  const origin = pageWrite(req);
   if (!origin.ok) return err(res, origin.status, origin.error);
 
   let raw;
@@ -727,7 +754,7 @@ async function handle(req, res) {
 
   m = p.match(RUN_ACTION);
   if (m && method === 'POST') {
-    const origin = auth.checkOrigin(req, config);
+    const origin = pageWrite(req);
     if (!origin.ok) return err(res, origin.status, origin.error);
     const result = m[2] === 'cancel' ? worker.cancel(m[1]) : worker.deleteRun(m[1]);
     if (result.missing) return err(res, 404, 'Run not found.');
