@@ -8,7 +8,17 @@ for p in server.js lib public tests scripts/gate.sh config.example.json; do
 done
 
 head_l "P0.2 nothing private came along"
-assert_absent "data/runs"            "client renders"
+# data/ is runtime state, not source: it may exist, but nothing under it is tracked.
+if [ -n "$(git ls-files data 2>/dev/null)" ]; then
+  red "data/ has tracked files (client renders or run state)"
+else
+  green "data/ holds no tracked files"
+fi
+if git check-ignore -q data/runs 2>/dev/null || grep -q '^data/' .gitignore 2>/dev/null; then
+  green "data/ is gitignored"
+else
+  red "data/ is not gitignored"
+fi
 assert_absent "SPEC.md"              "internal design doc"
 assert_absent "STATE.md"             "operator history"
 assert_absent "FRONTEND-HANDOFF.md"  "internal handover"
