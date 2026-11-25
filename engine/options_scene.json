@@ -1,0 +1,9 @@
+{
+  "note": "Scene 15 s job: VDN only, so the ref2va checkpoint and the Pika/Flex adapters are not needed. Replace the default download set with the Sol VAE alone to skip ~4 GB of unnecessary fetching.",
+  "comfy_commit": "49b61c3cd044fb65acd97a960467a00414694146",
+  "install_vdn": true,
+  "replace_downloads": [
+    ["Comfy-Org/MiniMax-H3", "vae/minimax_h3_sol_vae_int8_convrot.safetensors",
+     1988306504, "a742069ba173bc3aba64cf8d8289d073e0818f2753f2fc2768f0342645089682", null]
+  ]
+}

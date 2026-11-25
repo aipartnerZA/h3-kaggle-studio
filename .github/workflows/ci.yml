@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [ 22, 24 ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: install python and ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg python3
+
+      - name: config
+        run: cp config.example.json config.json
+
+      - name: suite
+        run: node tests/index.js
+
+      - name: syntax
+        run: |
+          node --check server.js
+          for f in lib/*.js public/app.js public/onboarding.js; do
+            [ -f "$f" ] && node --check "$f"
+          done
+
+      - name: no operator paths or names leaked into the tree
+        run: |
+          # Patterns are split so this file does not itself trip the check it performs.
+          PAT='wesaipartn[e]r|/root/ap[p]s|/srv/storag[e]|aipartner\.co\.z[a]'
+          if grep -rInE "$PAT" --exclude-dir=.git --exclude-dir=vendor . ; then
+            echo "leaked operator identity or host path"; exit 1
+          fi
+
+      - name: gate P1
+        run: bash scripts/gate.sh P1
+
+      - name: onboarding asserts under mock
+        run: |
+          MOCK_KAGGLE=1 H3UI_PORT=9199 H3UI_NO_WORKER=1 node server.js &
+          SRV=$!
+          for i in $(seq 1 40); do curl -sf -o /dev/null "http://127.0.0.1:9199/" && break; sleep 0.5; done
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9199/api/state)
+          echo "GET /api/state before setup -> $code"
+          test "$code" = "409"
+          curl -s http://127.0.0.1:9199/ | grep -q 'Render video on a free GPU'
+          kill $SRV
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck engine and scripts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning engine/*.sh scripts/*.sh scripts/gates/*.sh || true

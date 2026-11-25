@@ -1,0 +1,72 @@
+h3-kaggle-studio
+Copyright (c) 2026 A.I Partner PTY LTD
+
+This product includes software and models made available by third parties.
+
+--------------------------------------------------------------------------------
+MiniMax H3
+--------------------------------------------------------------------------------
+
+MiniMax H3 is licensed under the MiniMax H3 Community License Agreement, Copyright © 2026 MiniMax. All Rights Reserved.
+
+MiniMax H3 COMMUNITY LICENSE AGREEMENT
+Release date / license date: 2 August 2026.
+Licensor: Nanonoble Pte. Ltd. ("MiniMax")
+Full text: https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE
+
+This repository does not contain, bundle, mirror or distribute MiniMax H3 model
+weights or any other part of the MiniMax H3 Works. The Kaggle kernel started by
+this application downloads them from the address above at run time, under the
+terms of that agreement, for the person whose Kaggle account runs the kernel.
+
+The agreement is not an open source licence. It is limited to the "Applicable
+Territory", defined in section I.5 as worldwide excluding the Excluded
+Territories: the European Union, the United Kingdom, the Republic of Korea and
+the United States of America. Section V.4 states that the MiniMax H3 Works and
+any of their Outputs may not be used, reproduced, modified, distributed or
+displayed outside the Applicable Territory, and that any such use is not
+authorised by the agreement.
+
+Section V.2 requires that, before providing access to the MiniMax H3 Works or
+any product incorporating them, each recipient or user is bound to enforceable
+terms at least as protective as the restrictions in section V and Exhibit A of
+that agreement. This application does that in its first-run setup: the licence
+terms must be read, acknowledged and recorded before the studio will render
+anything.
+
+Section IV.1 requires separate prior written authorisation from MiniMax
+(api@minimax.io, subject line "MiniMax H3 licensing - authorization request")
+for commercial products and services generating more than 20 million US dollars
+a year in revenue.
+
+Section IV.2 requires that "MiniMax H3" is displayed prominently on the user
+interface of a commercial product or service that uses it. Section III.3 asks
+for "Powered by MiniMax H3" attribution and an AI-generation identifier in
+produced files; this application does both.
+
+--------------------------------------------------------------------------------
+Kaggle
+--------------------------------------------------------------------------------
+
+This application is not affiliated with, endorsed by or supported by Kaggle.
+It drives the Kaggle command-line tool using the account credentials of the
+person running it. Kaggle's Terms of Use and Acceptable Use Policy govern that
+account. Free compute is limited to your own internal, personal, non-commercial
+use and not on behalf of or for the benefit of any third party. Do not resell
+access to your account or run this application as a backend for other people's
+requests; Kaggle treats that as server farming. See docs/COMPLIANCE.md.
+
+--------------------------------------------------------------------------------
+Other components
+--------------------------------------------------------------------------------
+
+Swiper 14.4.0 — MIT — https://github.com/nolimits4web/swiper
+  Vendored unmodified at public/vendor/swiper-14.4.0/, hashes in scripts/vendor.lock.
+
+GSAP 3 — standard "no charge" licence — https://gsap.com/standard-license
+  Vendored unmodified at public/gsap.min.js.
+
+ComfyUI — GPL-3.0 — https://github.com/comfyanonymous/ComfyUI
+  Not distributed here. The Kaggle kernel clones it at a pinned commit at run time.
+
+Qwen3-VL-32B (used by the MiniMax H3 encoder) — Apache-2.0 — https://github.com/QwenLM/Qwen3-VL

@@ -1,0 +1,38 @@
+{
+  "port": 8804,
+  "bind": "127.0.0.1",
+  "prefix": "/",
+  "allowed_origins": [
+    "http://127.0.0.1:8804",
+    "http://localhost:8804"
+  ],
+  "kaggle_bin": "kaggle",
+  "kaggle_home": "",
+  "owner": "",
+  "kernel_prefix": "h3-six-",
+  "max_slots": 6,
+  "seconds_min": 6,
+  "seconds_max": 15,
+  "prompt_max_chars": 2000,
+  "image_max_bytes": 3145728,
+  "body_max_bytes": 25165824,
+  "mode": "vdn",
+  "aspect": "landscape",
+  "quality": "standard",
+  "video_vae": "minimax_h3_sol_vae_int8_convrot.safetensors",
+  "options_file": "options_scene.json",
+  "setup_min": 13,
+  "seconds_per_frame": 3.3,
+  "trained_window_frames": [
+    124,
+    362
+  ],
+  "quota_min_h": 2.5,
+  "quota_margin_h": 1.0,
+  "clip_host": "vps-local",
+  "allow_text_only": true,
+  "keep_runs": 40,
+  "poll_busy_s": 20,
+  "poll_idle_s": 60,
+  "queue_wait_warn_min": 90
+}

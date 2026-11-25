@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<title>h3-kaggle-studio — setup</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/vendor/swiper-14.4.0/swiper-bundle.min.css">
+<link rel="stylesheet" href="/onboarding.css">
+<script src="/vendor/swiper-14.4.0/swiper-bundle.min.js" defer></script>
+<script src="/onboarding.js" defer></script>
+</head>
+<body class="ob-body">
+
+<main class="ob-shell" role="dialog" aria-modal="true" aria-labelledby="ob-title-1">
+  <div class="ob-panel">
+
+    <header class="ob-head">
+      <div class="ob-brand">
+        <span class="ob-mark" aria-hidden="true"></span>
+        <span class="ob-brandname">h3-kaggle-studio</span>
+      </div>
+      <ol class="ob-steps" aria-label="Setup progress">
+        <li class="ob-step is-current" data-step="1"></li>
+        <li class="ob-step" data-step="2"></li>
+        <li class="ob-step" data-step="3"></li>
+        <li class="ob-step" data-step="4"></li>
+        <li class="ob-step" data-step="5"></li>
+        <li class="ob-step" data-step="6"></li>
+      </ol>
+    </header>
+
+    <div class="swiper ob-swiper">
+      <div class="swiper-wrapper">
+
+        <!-- 1 -->
+        <section class="swiper-slide ob-slide" aria-labelledby="ob-title-1">
+          <p class="ob-eyebrow">First run</p>
+          <h1 class="ob-title" id="ob-title-1">Render video on a free GPU</h1>
+          <p class="ob-lead">This studio submits your shots to Kaggle, which runs the MiniMax H3 video model on a free GPU. Each run takes about 2 hours. Up to 6 shots per run, 6 to 15 seconds each. Your videos are stored on this machine only.</p>
+          <ul class="ob-facts">
+            <li><strong>Up to 6 shots</strong><span>one kernel, one queue slot</span></li>
+            <li><strong>6–15 seconds</strong><span>per shot, per render</span></li>
+            <li><strong>~2 hours</strong><span>wall time for a full run</span></li>
+          </ul>
+          <div class="ob-actions">
+            <button class="ob-btn ob-btn-primary" type="button" data-next>Start</button>
+          </div>
+          <p class="ob-note">You will connect your own Kaggle account. This studio has no account of its own and stores nothing on a server of ours.</p>
+        </section>
+
+        <!-- 2 -->
+        <section class="swiper-slide ob-slide" aria-labelledby="ob-title-2">
+          <p class="ob-eyebrow">Licence</p>
+          <h1 class="ob-title" id="ob-title-2">Before you render: the model licence</h1>
+          <p class="ob-lead">The video model is MiniMax H3, licensed under the MiniMax H3 Community Licence Agreement (2 August 2026). It is not open source in the way this studio is.</p>
+          <ul class="ob-clauses">
+            <li>It may not be used, or its outputs used or displayed, in the European Union, the United Kingdom, South Korea or the United States. Outside those regions it is royalty-free, including commercially.</li>
+            <li>Any product using it must show “Powered by MiniMax H3”. This studio does.</li>
+            <li>Above 20 million US dollars a year in revenue, MiniMax must authorise your use in writing.</li>
+            <li>The licence covers the videos it makes, not just the model.</li>
+          </ul>
+          <p class="ob-lead ob-lead-small">If you are in an excluded region, ask MiniMax for a licence at <a href="https://platform.minimax.io/h3-license" target="_blank" rel="noopener noreferrer">platform.minimax.io/h3-license</a> before you render anything.</p>
+
+          <fieldset class="ob-fieldset">
+            <legend class="ob-legend">Where are you based?</legend>
+            <label class="ob-radio">
+              <input type="radio" name="territory" value="applicable">
+              <span>South Africa, or anywhere outside the EU, UK, South Korea and the United States</span>
+            </label>
+            <label class="ob-radio">
+              <input type="radio" name="territory" value="excluded">
+              <span>The European Union, the United Kingdom, South Korea or the United States</span>
+            </label>
+          </fieldset>
+
+          <label class="ob-check">
+            <input type="checkbox" id="lic-a">
+            <span>I have read this, and I am in a territory where the licence applies.</span>
+          </label>
+          <label class="ob-check">
+            <input type="checkbox" id="lic-b">
+            <span>I understand this studio does not grant me a licence to the model.</span>
+          </label>
+
+          <p class="ob-block ob-block-warn" id="territory-blocked" hidden>This studio will not render for you in an excluded territory. Request a licence from MiniMax first: <a href="https://platform.minimax.io/h3-license" target="_blank" rel="noopener noreferrer">platform.minimax.io/h3-license</a>. You can come back here when you have one.</p>
+          <p class="ob-error" id="lic-error" role="alert" hidden></p>
+
+          <div class="ob-actions">
+            <button class="ob-btn ob-btn-ghost" type="button" data-prev>Back</button>
+            <button class="ob-btn ob-btn-primary" type="button" id="lic-next" disabled>I understand</button>
+          </div>
+        </section>
+
+        <!-- 3 -->
+        <section class="swiper-slide ob-slide" aria-labelledby="ob-title-3">
+          <p class="ob-eyebrow">Rules</p>
+          <h1 class="ob-title" id="ob-title-3">Kaggle's rules</h1>
+          <p class="ob-lead">Renders run on your own Kaggle account and your own weekly GPU quota (30 hours, resetting weekly).</p>
+          <blockquote class="ob-quote">Kaggle's Terms of Use limit free compute to “your own internal, personal, non-commercial use, and not on behalf of or for the benefit of any third party”. Rendering paid client work on Kaggle's free GPU breaks that term, and Kaggle's stated consequence is termination of your account. If you are rendering for clients, use a paid GPU or ask Kaggle for written permission.</blockquote>
+          <p class="ob-lead ob-lead-small">Kaggle also requires phone verification before it will give you a GPU, and allows one account per person. Do not share your account, do not resell access to it, and do not run this studio as a backend for other people's requests: Kaggle treats that as server farming and closes accounts for it.</p>
+
+          <label class="ob-check">
+            <input type="checkbox" id="tos-ack">
+            <span>I understand, and the Kaggle account I am about to connect is my own.</span>
+          </label>
+          <p class="ob-error" id="tos-error" role="alert" hidden></p>
+
+          <div class="ob-actions">
+            <button class="ob-btn ob-btn-ghost" type="button" data-prev>Back</button>
+            <button class="ob-btn ob-btn-primary" type="button" id="tos-next" disabled>I understand</button>
+          </div>
+        </section>
+
+        <!-- 4 -->
+        <section class="swiper-slide ob-slide" aria-labelledby="ob-title-4">
+          <p class="ob-eyebrow">Step 1 of 2</p>
+          <h1 class="ob-title" id="ob-title-4">Get your Kaggle token</h1>
+          <ol class="ob-steps-list">
+            <li>Sign in or create an account: <a href="https://www.kaggle.com/account/login" target="_blank" rel="noopener noreferrer">kaggle.com/account/login</a></li>
+            <li>Verify your phone number if you have not already: <a href="https://www.kaggle.com/settings" target="_blank" rel="noopener noreferrer">kaggle.com/settings</a></li>
+            <li>Open <a href="https://www.kaggle.com/settings/api" target="_blank" rel="noopener noreferrer">kaggle.com/settings/api</a> and select “Generate New Token” under API.</li>
+            <li>Copy the whole token. It is one long string; the page only shows it once.</li>
+          </ol>
+          <p class="ob-note">If you already have a kaggle.json file on this machine, you can drop it in on the next pane instead.</p>
+          <div class="ob-actions">
+            <button class="ob-btn ob-btn-ghost" type="button" data-prev>Back</button>
+            <button class="ob-btn ob-btn-primary" type="button" data-next>Next</button>
+          </div>
+        </section>
+
+        <!-- 5 -->
+        <section class="swiper-slide ob-slide" aria-labelledby="ob-title-5">
+          <p class="ob-eyebrow">Step 2 of 2</p>
+          <h1 class="ob-title" id="ob-title-5">Connect your account</h1>
+          <p class="ob-lead">Paste the token, or drop your kaggle.json here. The token is written to <code>~/.kaggle/access_token</code> with owner-only permissions and is never shown again, not even to you.</p>
+
+          <form class="ob-form" id="cred-form" autocomplete="off" novalidate>
+            <label class="ob-label" for="token">Kaggle token</label>
+            <div class="ob-input-row">
+              <input class="ob-input" id="token" name="token" type="password" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Paste the whole token">
+              <button class="ob-btn ob-btn-primary" type="submit" id="verify">Verify</button>
+            </div>
+          </form>
+
+          <div class="ob-drop" id="drop" tabindex="0" role="button" aria-label="Drop your kaggle.json file here, or press Enter to choose a file">
+            <span class="ob-drop-icon" aria-hidden="true">⇣</span>
+            <span class="ob-drop-text">Drop <code>kaggle.json</code> here, or click to choose it</span>
+            <input type="file" id="file" accept=".json,application/json" hidden>
+          </div>
+
+          <p class="ob-block ob-block-ok" id="cred-ok" role="status" aria-live="polite" hidden></p>
+          <p class="ob-block ob-block-warn" id="cred-err" role="alert" aria-live="assertive" hidden></p>
+
+          <div class="ob-actions">
+            <button class="ob-btn ob-btn-ghost" type="button" data-prev>Back</button>
+          </div>
+        </section>
+
+        <!-- 6 -->
+        <section class="swiper-slide ob-slide" aria-labelledby="ob-title-6">
+          <p class="ob-eyebrow">Ready</p>
+          <h1 class="ob-title" id="ob-title-6">You are ready</h1>
+          <p class="ob-ready-line" id="ready-line">Connected.</p>
+          <p class="ob-note">Your token is stored on this machine at <code>~/.kaggle/access_token</code>. You can replace it or remove it from this panel at any time.</p>
+          <div class="ob-actions">
+            <button class="ob-btn ob-btn-primary" type="button" id="open-studio">Open the studio</button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <footer class="ob-foot">
+      <span>Powered by MiniMax H3 · Not affiliated with Kaggle or MiniMax.</span>
+      <span class="ob-mock" id="mock-flag" hidden>Mock mode — nothing is sent to Kaggle.</span>
+    </footer>
+
+    <template id="ob-bootstrap"><!--H3_ONBOARDING--></template>
+  </div>
+</main>
+
+</body>
+</html>

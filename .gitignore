@@ -1,0 +1,13 @@
+config.json
+data/
+node_modules/
+*.zip
+.lock_*
+.env
+.DS_Store
+engine/kernel_*/
+runs/
+data-gate/
+__pycache__/
+*.pyc
+srv.pid

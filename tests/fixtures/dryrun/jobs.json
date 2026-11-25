@@ -1,0 +1,11 @@
+{
+  "jobs": [
+    {
+      "id": "dryrun-01",
+      "prompt": "A dry-run fixture: a grey card, no render.",
+      "start_image": "tests/fixtures/dryrun/shot.png",
+      "seconds": 6,
+      "video_vae": "minimax_h3_sol_vae_int8_convrot.safetensors"
+    }
+  ]
+}
