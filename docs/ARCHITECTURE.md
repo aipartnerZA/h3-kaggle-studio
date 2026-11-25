@@ -27,6 +27,33 @@ disk under `data/`, so a restart does not lose a run in flight — the worker re
 | **verify** | `engine/verify_run.py` | `ffprobe` on each output: duration, codec, frame count, audio stream | a file that fails the expected shape |
 | **publish** | `lib/pipeline.js::publish` | moves the verified files into `data/runs/<tag>/out/`, rewrites the mp4 metadata with the AI-generation identifier, writes `done` | publishing twice from the same tag |
 
+## Stopping a run, and what a page load knows
+
+A phase on disk is a claim, not the truth. Kaggle is the truth, and it can change without this process
+noticing: a kernel deleted at kaggle.com leaves `data/runs/<tag>/state.json` still saying `RENDERING`.
+So `GET /` and `GET /api/state` call `worker.reconcile()` first: if the active run is past its push and
+its last status read is older than `status_reconcile_min_s` (10 s), Kaggle is read synchronously, with a
+15 s CLI timeout, before the page or the JSON is built. A second caller while a read is in flight is
+told `busy` rather than queueing another CLI call. A stale answer is therefore never served twice.
+
+A non-zero `kaggle kernels status` is classified, not guessed: `404` / "not found" means **gone**, any
+other fault (401, 5xx, network) means **unreadable**. Gone and the push is more than `GONE_GRACE_MIN`
+(3 min) old — a fresh push can take a moment to appear — closes the run as `FAILED` with the reason
+`<ref> is gone from Kaggle`. Unreadable keeps the run live, records `status_failed_reads`, and only
+fails after 30 min, because a run's fate being unknown is not the same as it being over.
+
+Cancel is available in every live phase and is deliberately awkward: it is a text link at the bottom of
+the run panel, and the dialog will not enable until the run tag is typed. Behind it:
+
+| phase | what cancel does |
+|---|---|
+| `QUEUED` … `BUILDING` | local only — nothing has reached Kaggle |
+| `PUSHED`, `GPU_QUEUED`, `RENDERING` | `kaggle kernels delete <ref> -y` first, then `CANCELLED`. Kaggle has no "stop", so deleting the kernel is the stop — the same thing a person does on kaggle.com. If the delete is refused (403, network), the run is left live and the refusal is shown: marking it cancelled locally would hide a GPU job still spending quota |
+| `KERNEL_COMPLETE`, `DOWNLOADING`, `VERIFYING` | local only — the GPU is finished; only the download stops, and clips already fetched stay |
+| terminal | `409`, nothing to cancel |
+
+`delete` on an already-gone kernel (`404`) counts as a successful stop.
+
 ## The first-run gate
 
 Before anything is rendered, `lib/setup.js` owns the state machine and `server.js` enforces it ahead of

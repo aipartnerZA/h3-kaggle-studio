@@ -232,3 +232,144 @@ test('server fails at boot when the kaggle CLI cannot be executed', () => {
   assert.match(r.stderr, /pip install kaggle/);
   assert.match(r.stderr, /uv tool install kaggle/);
 });
+
+// ---- The truth on a page load, and stopping a run ---------------------------
+
+function fakeKaggleControl(root, opts) {
+  const o = opts || {};
+  const bin = path.join(root, 'fake-kaggle-control');
+  const status = o.status === 'gone'
+    ? 'echo "404 Client Error: Not Found for url: https://api.kaggle.com/v1/kernels/sessions" >&2; exit 1'
+    : 'echo "acct/h3-six-x has status \\"KernelWorkerStatus.QUEUED\\""; exit 0';
+  const del = o.delete === 'refuse'
+    ? 'echo "403 Client Error: Forbidden for url: https://api.kaggle.com" >&2; exit 1'
+    : 'echo "Kernel $3 deleted successfully"; exit 0';
+  fs.writeFileSync(bin, [
+    '#!/bin/bash',
+    'case "$1" in',
+    '  config) echo "- username: acct"; exit 0 ;;',
+    '  quota) echo "GPU 4.50h 25.50h 30.00h 2026-11-28T00:00:00+00:00"; exit 0 ;;',
+    '  kernels)',
+    '    case "$2" in',
+    '      status) ' + status + ' ;;',
+    '      delete) ' + del + ' ;;',
+    '    esac',
+    '    exit 1 ;;',
+    'esac',
+    'exit 1',
+  ].join('\n') + '\n', { mode: 0o755 });
+  return bin;
+}
+
+function writeLiveRun(root, tag, fields) {
+  const runDir = path.join(root, 'data', 'runs', tag);
+  fs.mkdirSync(path.join(runDir, 'out'), { recursive: true });
+  fs.mkdirSync(path.join(runDir, 'logs'), { recursive: true });
+  fs.writeFileSync(path.join(runDir, 'request.json'), JSON.stringify({
+    tag, submitted_at: '2026-11-25T10:00:00Z', submission_id: 'live',
+    slots: [{ n: 1, id: 's1_scene', prompt: 'a calm lake', seconds: 6, seed: 813001 }],
+  }));
+  fs.writeFileSync(path.join(runDir, 'state.json'), JSON.stringify(Object.assign({
+    tag,
+    phase: 'RENDERING',
+    phase_since: new Date(Date.now() - 5 * 60000).toISOString(),
+    submitted_at: '2026-11-25T10:00:00Z',
+    pushed_at: new Date(Date.now() - 10 * 60000).toISOString(),
+    kernel_ref: 'acct/h3-six-' + tag,
+    kaggle_status: 'RUNNING',
+    kaggle_status_at: new Date(Date.now() - 3 * 60000).toISOString(),
+    status_stale: false,
+    slots: [{ n: 1, id: 's1_scene', seconds: 6, frames: 158, result: 'pending' }],
+    totals: { ok: 0, failed: 0 },
+    error: null,
+    log_tail: [],
+  }, fields || {})));
+  fs.writeFileSync(path.join(root, 'data', 'active.json'), JSON.stringify({
+    tag, since: new Date().toISOString(),
+  }));
+}
+
+async function withControlServer(t, opts, ready) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-c-'));
+  const bin = fakeKaggleControl(root, opts);
+  const port = await freePort();
+  const child = await startServer({
+    H3UI_CONFIG: path.join(root, 'config.json'),
+    H3UI_BASE: root,
+    H3UI_PORT: String(port),
+    H3UI_KAGGLE_BIN: bin,
+    H3UI_NO_WORKER: '1',
+  });
+  t.after(() => child.kill('SIGTERM'));
+  return ready({ root, port, origin: { Origin: 'http://127.0.0.1:' + port } });
+}
+
+test('a kernel deleted at Kaggle stops claiming a render, on the load itself', async (t) => {
+  await withControlServer(t, { status: 'gone' }, async ({ root, port }) => {
+    const tag = 'ui-gone-1';
+    writeLiveRun(root, tag);
+
+    let r = await request(port, 'GET', '/api/state');
+    assert.equal(r.status, 200);
+    let board = JSON.parse(r.body);
+    assert.equal(board.active, null, 'the run is over, so nothing is active');
+    const run = board.runs.find((x) => x.tag === tag);
+    assert.equal(run.phase, 'FAILED');
+    assert.match(run.error, /gone from Kaggle/);
+
+    r = await request(port, 'GET', '/');
+    const banner = (r.body.match(/<div id="status-banner"[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '';
+    assert.ok(!/RENDER IN PROGRESS/.test(banner), 'the banner must not claim a render');
+    assert.match(banner, /Last run FAILED/);
+    assert.match(r.body, /gone from Kaggle/, 'the reason travels with the page state');
+  });
+});
+
+test('a live run keeps its phase when Kaggle still reports it', async (t) => {
+  await withControlServer(t, {}, async ({ root, port }) => {
+    const tag = 'ui-live-1';
+    writeLiveRun(root, tag);
+    const r = await request(port, 'GET', '/api/state');
+    const board = JSON.parse(r.body);
+    assert.equal(board.active.tag, tag);
+    assert.equal(board.active.phase, 'GPU_QUEUED', 'the fresher Kaggle answer wins');
+    assert.equal(board.active.status_stale, false);
+  });
+});
+
+test('cancel deletes the Kaggle kernel and closes the run', async (t) => {
+  await withControlServer(t, {}, async ({ root, port, origin }) => {
+    const tag = 'ui-cancel-1';
+    writeLiveRun(root, tag, { kaggle_status_at: new Date().toISOString() });
+    let r = await request(port, 'GET', '/api/state');
+    assert.equal(JSON.parse(r.body).active.tag, tag);
+
+    r = await request(port, 'POST', '/api/runs/' + tag + '/cancel', {}, origin);
+    assert.equal(r.status, 200);
+    const out = JSON.parse(r.body);
+    assert.equal(out.phase, 'CANCELLED');
+    assert.equal(out.remote.ok, true);
+
+    r = await request(port, 'GET', '/api/state');
+    const board = JSON.parse(r.body);
+    assert.equal(board.active, null);
+    assert.equal(board.runs.find((x) => x.tag === tag).phase, 'CANCELLED');
+  });
+});
+
+test('a cancel Kaggle refuses is refused here too, with the reason', async (t) => {
+  await withControlServer(t, { delete: 'refuse' }, async ({ root, port, origin }) => {
+    const tag = 'ui-cancel-2';
+    writeLiveRun(root, tag, { kaggle_status_at: new Date().toISOString() });
+
+    const r = await request(port, 'POST', '/api/runs/' + tag + '/cancel', {}, origin);
+    assert.equal(r.status, 409);
+    const body = JSON.parse(r.body);
+    assert.match(body.error, /Kaggle would not delete acct\/h3-six-ui-cancel-2/);
+    assert.match(body.error, /403 Client Error/);
+
+    const state = JSON.parse(fs.readFileSync(
+      path.join(root, 'data', 'runs', tag, 'state.json'), 'utf8'));
+    assert.equal(state.phase, 'RENDERING', 'the job is still running, so the run is still live');
+  });
+});

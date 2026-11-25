@@ -322,7 +322,22 @@ function fmtClock(iso) {
   return `${formatSast(iso) || '—'} / ${new Date(iso).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 }
 
+function reconcileLiveRun() {
+  if (!worker || typeof worker.reconcile !== 'function') return null;
+  try {
+    return worker.reconcile({
+      min_age_s: config.status_reconcile_min_s == null ? 10 : config.status_reconcile_min_s,
+    });
+  } catch (e) {
+    return { error: String((e && e.message) || e) };
+  }
+}
+
 function boardState() {
+  // A page load asks what is true now, not what was true when the worker last wrote
+  // to disk. Reading Kaggle here is what stops a deleted kernel from being served
+  // as "RENDER IN PROGRESS" refresh after refresh.
+  reconcileLiveRun();
   const q = quota();
   const active = worker.getActive();
   let live = null;
@@ -332,6 +347,7 @@ function boardState() {
       kaggle_status: st.kaggle_status || null,
       kaggle_status_at: st.kaggle_status_at || null,
       status_stale: !!st.status_stale,
+      status_failed_reads: st.status_failed_reads || 0,
       phase_since: st.phase_since || null,
       submitted_at: st.submitted_at || null,
       pushed_at: st.pushed_at || null,
@@ -386,7 +402,9 @@ function busyDetail(board, nowMs) {
   const age = a.kaggle_status_at ? (nowMs - Date.parse(a.kaggle_status_at)) / 1000 : Infinity;
   if (a.status_stale || age > 120) {
     const mins = Number.isFinite(age) ? Math.floor(age / 60) : '?';
-    detail += ` (status may be stale — last read ${mins} min ago)`;
+    detail += a.status_failed_reads
+      ? ` (Kaggle status not readable — ${a.status_failed_reads} failed read(s), last good read ${mins} min ago)`
+      : ` (status may be stale — last read ${mins} min ago)`;
   }
   return detail;
 }
@@ -399,7 +417,9 @@ function bannerHtml(board, nowMs) {
   if (last) {
     const head = last.phase === 'DONE'
       ? `Last run DONE — ${last.totals.ok}/${last.slots} clips`
-      : 'Last run FAILED — reason below';
+      : last.phase === 'CANCELLED'
+        ? 'Last run stopped by the operator'
+        : 'Last run FAILED — reason below';
     return `<strong>${htmlEsc(head)}</strong><span>${htmlEsc(last.tag)} · ${htmlEsc(last.phase)}</span>`;
   }
   const q = board.quota;
@@ -756,11 +776,16 @@ async function handle(req, res) {
   if (m && method === 'POST') {
     const origin = pageWrite(req);
     if (!origin.ok) return err(res, origin.status, origin.error);
-    const result = m[2] === 'cancel' ? worker.cancel(m[1]) : worker.deleteRun(m[1]);
+    const result = m[2] === 'cancel'
+      ? worker.cancel(m[1], { reason: 'cancelled from the studio' })
+      : worker.deleteRun(m[1]);
     if (result.missing) return err(res, 404, 'Run not found.');
-    if (result.conflict) return err(res, 409, m[2] === 'cancel'
-      ? 'Already pushed — the render service exposes no cancel. Let it finish.'
-      : 'Only finished runs can be deleted.', { phase: result.phase });
+    if (result.conflict) {
+      return err(res, 409, result.message || 'Only finished runs can be deleted.', { phase: result.phase });
+    }
+    if (result.refused) {
+      return err(res, 409, result.message || 'The run could not be cancelled.', { phase: result.phase });
+    }
     return json(res, 200, result);
   }
 

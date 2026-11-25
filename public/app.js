@@ -12,7 +12,6 @@
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
   const TERMINAL = ['DONE', 'PARTIAL', 'FAILED', 'CANCELLED'];
-  const PRE_PUSH = ['QUEUED', 'STAGING', 'STAGED', 'GATING', 'BUILDING'];
   const PHASE_KEY = {
     QUEUED: 'phase_staging', STAGING: 'phase_staging', STAGED: 'phase_gating',
     GATING: 'phase_gating', BUILDING: 'phase_building', PUSHED: 'phase_pushed',
@@ -281,6 +280,10 @@
     }
     const last = (board.runs || []).find((r) => TERMINAL.indexOf(r.phase) !== -1);
     if (last) {
+      if (last.phase === 'CANCELLED') {
+        setBanner('idle', t('last_cancelled'), `${last.tag} · CANCELLED`);
+        return;
+      }
       const done = last.phase === 'DONE';
       setBanner(done ? 'done' : 'failed',
         done ? t('last_done', { ok: (last.totals || {}).ok, n: last.slots }) : t('last_failed'),
@@ -307,10 +310,6 @@
     caption.textContent = busy ? t('submit_disabled', { tag: board.active.tag }) : '';
     $('#dock-summary').hidden = busy;
     document.body.classList.toggle('is-busy', busy);
-    const cancel = $('#cancel-button');
-    const canCancel = busy && PRE_PUSH.indexOf(board.active.phase) !== -1;
-    cancel.hidden = !canCancel;
-    if (canCancel) cancel.textContent = t('cancel_button');
     if (!busy) showFormError('');
   }
 
@@ -450,10 +449,22 @@
     const panel = $('#run-panel');
     const active = board.active;
     const recent = (board.runs || []).find((r) =>
-      TERMINAL.indexOf(r.phase) !== -1 && r.files && r.files.length);
+      TERMINAL.indexOf(r.phase) !== -1
+      && ((r.files && r.files.length)
+        || r.phase === 'CANCELLED' || r.phase === 'FAILED'));
     const tag = active ? active.tag : (recent ? recent.tag : null);
     $('#run-ssr').replaceChildren();
-    if (!tag) { panel.hidden = true; panelSig = ''; elapsedStartMs = null; return; }
+    if (!tag) {
+      panel.hidden = true;
+      panelSig = '';
+      elapsedStartMs = null;
+      renderStopZone(null, null, null);
+      $('#run-summary').replaceChildren();
+      $('#slot-table-wrap').replaceChildren();
+      $('#downloads').replaceChildren();
+      $('#log-links').replaceChildren();
+      return;
+    }
     const wasHidden = panel.hidden;
     panel.hidden = false;
     $('#run-title').textContent = active ? 'Rendering now' : 'Latest render';
@@ -480,6 +491,7 @@
     const finalMs = Number.isFinite(runStart)
       ? Math.max(0, Date.parse(stateObj.phase_since || '') - runStart) : 0;
     panel.dataset.phase = phase;
+    renderStopZone(phase, tag, stateObj);
 
     // Elapsed time and the ETA bar advance between polls. Update only those,
     // and leave the slot table / video players untouched unless real data changed.
@@ -507,6 +519,7 @@
     if (phase === 'DONE') line.textContent = t('done', { ok: totals.ok, n: slotCount });
     else if (phase === 'PARTIAL') line.textContent = t('partial', { f: totals.failed });
     else if (phase === 'FAILED') line.textContent = t('failed', { reason: stateObj.error || 'unknown' });
+    else if (phase === 'CANCELLED') line.textContent = t('cancelled', { reason: stateObj.error || 'stopped by the operator' });
     else line.textContent = t(PHASE_KEY[phase] || 'phase_staging');
     const meta = node('p', 'run-meta');
     meta.appendChild(pill(phase));
@@ -834,17 +847,106 @@
     window.scrollTo({ top: 0, behavior: SMOOTH });
   }
 
-  async function cancel() {
-    if (!board.active) return;
-    if (!window.confirm(t('cancel_confirm'))) return;
+  async function cancel(tag, phase) {
+    if (!tag) return;
+    const finished = phase === 'KERNEL_COMPLETE' || phase === 'DOWNLOADING' || phase === 'VERIFYING';
+    const confirmBtn = $('#stop-confirm');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = t('stop_working');
     try {
-      const r = await fetch(`${PREFIX}/api/runs/${encodeURIComponent(board.active.tag)}/cancel`,
+      const r = await fetch(`${PREFIX}/api/runs/${encodeURIComponent(tag)}/cancel`,
         { method: 'POST', headers: writeHeaders() });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'cancel refused');
-      board.active = null;
-      showFormError('Run cancelled before the push.');
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `cancel refused (${r.status})`);
+      closeStopDialog();
+      const done = data.remote
+        ? (data.remote.gone ? t('stop_ok_gone') : t('stop_ok_remote'))
+        : (finished ? t('stop_ok_finished') : t('stop_ok_local'));
+      showStopMsg(done);
       await pollNow();
-    } catch (e) { showFormError(`Could not cancel: ${e.message}`); }
+    } catch (e) {
+      // The server refused to fake it: the run is still live and the message says
+      // what to do instead. Keep the box open so it can be read.
+      const box = $('#stop-error');
+      box.textContent = e.message;
+      box.hidden = false;
+      confirmBtn.textContent = t('stop_button');
+      confirmBtn.disabled = $('#stop-input').value.trim().toLowerCase() !== tag.toLowerCase();
+    }
+  }
+
+  function showStopMsg(message) {
+    const el = $('#stop-msg');
+    if (!el) return;
+    el.textContent = message || '';
+    el.hidden = !message;
+  }
+
+  function closeStopDialog() {
+    const dialog = $('#stop-dialog');
+    if (!dialog) return;
+    if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+    else dialog.removeAttribute('open');
+  }
+
+  // Stopping is not a button in the dock any more: it sits at the bottom of the
+  // run panel as a quiet text link and asks for the run tag, because a cancel
+  // that deletes a Kaggle kernel should never be one stray click away.
+  let stopTarget = { tag: null, phase: null, ref: null };
+
+  function renderStopZone(phase, tag, stateObj) {
+    const zone = $('#stop-zone');
+    if (!zone) return;
+    const live = !!tag && TERMINAL.indexOf(phase) === -1;
+    if (!live) {
+      zone.hidden = true;
+      zone.replaceChildren();
+      zone.dataset.tag = '';
+      stopTarget = { tag: null, phase: null, ref: null };
+      return;
+    }
+    if (zone.dataset.tag !== tag) showStopMsg('');
+    zone.dataset.tag = tag;
+    stopTarget = {
+      tag, phase,
+      ref: (stateObj && stateObj.kernel_ref) || tag,
+    };
+    if (!zone.firstChild) {
+      const btn = node('button', 'stop-link', t('stop_link'));
+      btn.type = 'button';
+      btn.addEventListener('click', openStopDialog);
+      zone.replaceChildren(btn);
+    }
+    zone.hidden = false;
+  }
+
+  function openStopDialog() {
+    const { tag, phase, ref } = stopTarget;
+    if (!tag) return;
+    const remote = phase === 'PUSHED' || phase === 'GPU_QUEUED' || phase === 'RENDERING';
+    const finished = phase === 'KERNEL_COMPLETE' || phase === 'DOWNLOADING' || phase === 'VERIFYING';
+    const lede = finished ? t('stop_lede_finished')
+      : (remote ? t('stop_lede_remote', { ref }) : t('stop_lede_local'));
+    const dialog = $('#stop-dialog');
+    $('#stop-title').textContent = t('stop_title');
+    $('#stop-lede').textContent = lede;
+    $('#stop-type-label').textContent = t('stop_type', { tag });
+    const input = $('#stop-input');
+    input.value = '';
+    const box = $('#stop-error');
+    box.hidden = true;
+    box.textContent = '';
+    const confirmBtn = $('#stop-confirm');
+    confirmBtn.textContent = t('stop_button');
+    confirmBtn.disabled = true;
+    $('#stop-keep').textContent = t('stop_keep');
+    if (!dialog) {
+      if (window.confirm(`${t('stop_title')}\n\n${lede}`)) cancel(tag, phase);
+      return;
+    }
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', 'open');
+    setTimeout(() => input.focus(), 30);
   }
 
   function hasFiles(e) {
@@ -939,7 +1041,26 @@
       { scale: 1, duration: .55, ease: 'back.out(3)', stagger: .06, overwrite: 'auto', clearProps: 'transform' }));
   });
   $('#submit-form').addEventListener('submit', submit);
-  $('#cancel-button').addEventListener('click', cancel);
+
+  // Stop dialog: the run tag has to be typed exactly before the button accepts a click.
+  const stopInput = $('#stop-input');
+  const stopConfirm = $('#stop-confirm');
+  if (stopInput && stopConfirm) {
+    const matches = () => stopTarget.tag
+      && stopInput.value.trim().toLowerCase() === stopTarget.tag.toLowerCase();
+    stopInput.addEventListener('input', () => {
+      stopConfirm.disabled = !matches();
+      $('#stop-error').hidden = true;
+    });
+    stopInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !stopConfirm.disabled) { e.preventDefault(); stopConfirm.click(); }
+    });
+    stopConfirm.addEventListener('click', () => {
+      if (matches()) cancel(stopTarget.tag, stopTarget.phase);
+    });
+    const keep = $('#stop-keep');
+    if (keep) keep.addEventListener('click', closeStopDialog);
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { clearTimeout(timer); pollNow(); }
   });
@@ -947,7 +1068,7 @@
   // Buttons squish on press and spring back.
   let pressed = null;
   document.addEventListener('pointerdown', (e) => {
-    const b = e.target.closest && e.target.closest('#submit-button, #copy-prompt, #cancel-button, .slot-clear');
+    const b = e.target.closest && e.target.closest('#submit-button, #copy-prompt, #stop-confirm, #stop-keep, .slot-clear');
     if (!b || b.disabled) return;
     pressed = b;
     fx((g) => g.to(b, { scale: .95, duration: .12, ease: 'power2.out', overwrite: 'auto' }));

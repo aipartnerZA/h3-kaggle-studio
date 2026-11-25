@@ -120,3 +120,56 @@ test('username drives listLive; no owner means no live list and no query', () =>
   });
   assert.deepEqual(bare.listLive(), []);
 });
+
+test('a status that says the kernel does not exist is flagged gone, a fault is not', () => {
+  assert.equal(k.looksGone('404 Client Error: Not Found for url: https://api.kaggle.com/...'), true);
+  assert.equal(k.looksGone('The resource was not found.'), true);
+  assert.equal(k.looksGone('401 Unauthorized'), false);
+  assert.equal(k.looksGone('500 Server Error: This is a problem on Kaggle\'s side'), false);
+  assert.equal(k.looksGone(''), false);
+});
+
+test('createClient marks a 404 status read as gone', () => {
+  const c = k.createClient({ kaggle_bin: 'kaggle' }, {
+    run: () => ({
+      status: 1, stdout: '',
+      stderr: '404 Client Error: Not Found for url: https://api.kaggle.com/v1/kernels/sessions\n\nThe resource was not found.',
+    }),
+  });
+  const st = c.status('acct/h3-six-ui-1');
+  assert.equal(st.ok, false);
+  assert.equal(st.gone, true);
+  assert.match(st.error, /404/);
+});
+
+test('delete asks the CLI to delete the kernel without a prompt', () => {
+  const calls = [];
+  const c = k.createClient({ kaggle_bin: 'kaggle' }, {
+    run: (bin, args) => {
+      calls.push(args);
+      return { status: 0, stdout: 'Kernel acct/h3-six-ui-1 deleted successfully\n', stderr: '' };
+    },
+  });
+  const r = c.delete('acct/h3-six-ui-1');
+  assert.equal(r.ok, true);
+  assert.deepEqual(calls[0], ['kernels', 'delete', 'acct/h3-six-ui-1', '-y']);
+});
+
+test('delete on an already deleted kernel is gone, not an error to show', () => {
+  const c = k.createClient({ kaggle_bin: 'kaggle' }, {
+    run: () => ({ status: 1, stdout: '', stderr: '404 Client Error: Not Found for url: ...' }),
+  });
+  const r = c.delete('acct/h3-six-ui-1');
+  assert.equal(r.ok, false);
+  assert.equal(r.gone, true);
+});
+
+test('delete reports a permission failure as an error worth showing', () => {
+  const c = k.createClient({ kaggle_bin: 'kaggle' }, {
+    run: () => ({ status: 1, stdout: '', stderr: '403 Client Error: Forbidden for url: ...' }),
+  });
+  const r = c.delete('acct/h3-six-ui-1');
+  assert.equal(r.ok, false);
+  assert.equal(r.gone, false);
+  assert.match(r.error, /403/);
+});

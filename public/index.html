@@ -46,7 +46,22 @@
   <span data-s="failed">Failed: {reason}</span>
   <span data-s="cancel_button">Cancel this run</span>
   <span data-s="cancel_confirm">Cancel this run? Nothing has been pushed to the render service.</span>
+  <span data-s="cancelled">Cancelled — {reason}</span>
+  <span data-s="stop_link">Stop this render…</span>
+  <span data-s="stop_title">Stop this render?</span>
+  <span data-s="stop_lede_local">Nothing has been pushed to the render service yet, so this only ends the run here.</span>
+  <span data-s="stop_lede_remote">This deletes the Kaggle kernel {ref} — the same thing you would do on kaggle.com. The render stops immediately, clips it had not delivered are lost, and the GPU time already spent is not refunded.</span>
+  <span data-s="stop_lede_finished">The kernel has already finished. This only stops the download and check here; clips already fetched stay on this server.</span>
+  <span data-s="stop_type">Type {tag} to confirm</span>
+  <span data-s="stop_button">Stop this render</span>
+  <span data-s="stop_keep">Keep rendering</span>
+  <span data-s="stop_working">Stopping…</span>
+  <span data-s="stop_ok_local">Run cancelled. Nothing had reached Kaggle.</span>
+  <span data-s="stop_ok_remote">Run cancelled. The Kaggle kernel was deleted.</span>
+  <span data-s="stop_ok_gone">Run cancelled. The Kaggle kernel was already gone.</span>
+  <span data-s="stop_ok_finished">Download stopped. The clips already fetched are kept.</span>
   <span data-s="last_done">Last run DONE — {ok}/{n} clips</span>
+  <span data-s="last_cancelled">Last run stopped by the operator</span>
   <span data-s="last_failed">Last run FAILED — reason below</span>
   <span data-s="deleted">Deleted — the clips for this run are gone from this server.</span>
 </template>
@@ -271,7 +286,6 @@
         <span id="dock-summary" class="dock-summary"></span>
         <div class="submit-row">
           <span id="submit-caption" class="submit-caption" hidden></span>
-          <button type="button" id="cancel-button" class="danger" hidden>Cancel this run</button>
           <button type="submit" id="submit-button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.8v12.4a.8.8 0 0 0 1.2.7l9.6-6.2a.8.8 0 0 0 0-1.4L7.2 3.1A.8.8 0 0 0 6 3.8z" fill="currentColor"/></svg>Render video</button>
         </div>
       </div>
@@ -286,6 +300,8 @@
     <div id="downloads"></div>
     <div id="log-links" class="log-links"></div>
     <div id="run-ssr"><!--H3_RUNPANEL--></div>
+    <div id="stop-zone" class="stop-zone" hidden></div>
+    <p id="stop-msg" class="stop-msg" role="status" hidden></p>
   </section>
 
   <section class="panel">
@@ -296,5 +312,22 @@
 </main>
 
 <footer class="footer">h3-kaggle-studio · clips stay on this server · Powered by MiniMax H3</footer>
+
+<!-- Stopping a render is deliberate: it is tucked away in the run panel and it
+     asks for the run tag, because a cancel that deletes a Kaggle kernel is not
+     something a stray click should be able to do. -->
+<dialog id="stop-dialog" class="stop-dialog" aria-labelledby="stop-title">
+  <div class="stop-card">
+    <h2 id="stop-title" class="stop-title"></h2>
+    <p id="stop-lede" class="stop-lede"></p>
+    <label id="stop-type-label" class="stop-type-label" for="stop-input"></label>
+    <input id="stop-input" class="stop-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <p id="stop-error" class="stop-error" role="alert" hidden></p>
+    <div class="stop-actions">
+      <button type="button" id="stop-keep" class="stop-keep"></button>
+      <button type="button" id="stop-confirm" class="stop-confirm danger" disabled></button>
+    </div>
+  </div>
+</dialog>
 </body>
 </html>

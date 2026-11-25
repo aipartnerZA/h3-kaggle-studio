@@ -476,3 +476,50 @@ textarea[data-prompt], .prompt-text { -webkit-user-select: text; user-select: te
 .copy-prompt.copied { color: var(--mint-ink); border-color: var(--line); }
 .prompt-cell { display: flex; align-items: flex-start; gap: 6px; }
 .prompt-text { flex: 1; min-width: 0; }
+
+/* ---- Stopping a run: quiet link, loud confirmation --------------------- */
+.stop-zone {
+  display: flex; justify-content: flex-end; align-items: center;
+  margin-top: 18px; padding-top: 12px; border-top: 1px dashed var(--line);
+}
+.stop-link {
+  border: 0; background: none; padding: 6px 2px; color: var(--ink-2);
+  font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+.stop-link:hover:not(:disabled) { color: var(--coral-ink); text-decoration-color: var(--coral); }
+.stop-msg { margin-top: 10px; color: var(--mint-ink); font-size: 13px; }
+
+.stop-dialog {
+  border: 0; padding: 0; background: transparent; color: var(--ink);
+  width: 100%; max-width: min(540px, calc(100vw - 28px));
+}
+.stop-dialog::backdrop { background: rgba(15, 12, 40, .58); }
+.stop-card {
+  background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: var(--r-card); box-shadow: var(--shadow);
+  padding: 22px; display: flex; flex-direction: column; gap: 12px;
+}
+.stop-title { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+.stop-lede { margin: 0; color: var(--ink-2); font-size: 14px; line-height: 1.5; text-wrap: pretty; }
+.stop-type-label { color: var(--ink-2); font-size: 13px; font-weight: 650; }
+.stop-input {
+  width: 100%; padding: 10px 12px; border-radius: var(--r-ctl);
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--ink);
+  font: inherit; font-size: 14px;
+  -webkit-user-select: text; user-select: text;
+}
+.stop-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.stop-error {
+  margin: 0; padding: 10px 12px; border-radius: var(--r-ctl);
+  background: var(--coral-soft); color: var(--coral-ink); font-size: 13px; line-height: 1.45;
+}
+.stop-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+button.stop-confirm { background: var(--coral); border-color: var(--coral); color: #fff; }
+button.stop-confirm:hover:not(:disabled) { background: var(--coral-ink); border-color: var(--coral-ink); color: #fff; }
+button.stop-keep { color: var(--ink-2); }
+
+@media (max-width: 420px) {
+  .stop-actions > button { flex: 1 1 auto; }
+  .stop-zone { justify-content: flex-start; }
+}

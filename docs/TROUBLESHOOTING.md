@@ -40,6 +40,20 @@ at 6 and prep images smaller; the preflight refuses above ~800 KB of base64 for 
 One run at a time per account. `kaggle kernels list -m --user=<you>` shows what is running; cancel it or
 wait. Two live kernels also means two GPU sessions counted against one quota.
 
+**I deleted the kernel at kaggle.com — the page still said RENDER IN PROGRESS**
+It should not, and now it does not: every page load and `/api/state` re-reads Kaggle when the last
+status is older than 10 s. A `404` from `kaggle kernels status` closes the run as `FAILED` with
+"`<ref>` is gone from Kaggle". If the page still insists, check `data/runs/<tag>/state.json`:
+`pushed_at` older than 3 minutes plus a `404` is what triggers it. A `401`/`5xx`/network failure is a
+different answer and keeps the run live for up to 30 minutes, because "cannot read" is not "gone".
+
+**How do I stop a render?**
+Open the run panel and use the quiet "Stop this render…" link at the bottom of it. Type the run tag in
+the box; the button stays disabled until it matches. Past the push, the studio deletes the Kaggle
+kernel (that is the only stop Kaggle offers) and says so before you confirm. If Kaggle refuses the
+delete, the run stays live and the refusal is shown — delete it at `kaggle.com/code/<ref>` instead,
+and the page follows within a minute.
+
 **Still QUEUED after 20 minutes**
 Kaggle's GPU queue, not a fault. It will run. The watcher keeps polling with backoff.
 

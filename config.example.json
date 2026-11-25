@@ -34,5 +34,6 @@
   "keep_runs": 40,
   "poll_busy_s": 20,
   "poll_idle_s": 60,
+  "status_reconcile_min_s": 10,
   "queue_wait_warn_min": 90
 }
