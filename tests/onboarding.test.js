@@ -207,3 +207,45 @@ test('the address you browsed is same-origin, whether LAN IP or proxy hostname',
   });
   assert.equal(proxied.status, 200, 'a write through the configured proxy was refused');
 });
+
+test('a TLS proxy that forwards no proto is still same-origin, and X-Forwarded-Host counts', async (t) => {
+  const payload = { accepted: true, tos_ack: true, territory: 'applicable' };
+  const cases = [
+    // preview.<zone> terminates TLS and forwards Host without X-Forwarded-Proto (Instabox
+    // preview URLs): the browser says https, the hop said nothing. Host equality decides.
+    { name: 'no forwarded proto', headers: { Host: 'studio.example', Origin: 'https://studio.example' }, expect: 200 },
+    // A proxy that rewrites Host to the loopback origin and reports the public name separately.
+    { name: 'x-forwarded-host', headers: { 'X-Forwarded-Host': 'studio.example', Origin: 'https://studio.example' }, expect: 200 },
+    // A port that differs from every address the studio was reached on is still refused.
+    { name: 'wrong port', headers: { Host: 'studio.example', Origin: 'https://studio.example:9999' }, expect: 403 },
+  ];
+
+  for (const c of cases) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-edge-'));
+    const port = await freePort();
+    const child = await startGated({ H3UI_PORT: String(port), H3UI_BASE: root });
+    t.after(() => child.kill());
+    const headers = Object.assign({}, c.headers);
+    // A proxy that rewrote Host still had to address something; default to the loopback target.
+    if (!headers.Host) headers.Host = '127.0.0.1:' + port;
+    const r = await rawRequest(port, 'POST', '/api/setup/licence', payload, headers);
+    assert.equal(r.status, c.expect, `${c.name}: expected ${c.expect}, got ${r.status} ${r.body}`);
+    const state = JSON.parse((await request(port, 'GET', '/api/setup')).body);
+    assert.equal(state.state, c.expect === 200 ? 'licence_ok' : 'new', `${c.name}: state did not follow the answer`);
+  }
+});
+
+test('the refusal names the host the studio was reached on, not just the origin', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'h3ui-named-'));
+  const port = await freePort();
+  const child = await startGated({ H3UI_PORT: String(port), H3UI_BASE: root });
+  t.after(() => child.kill());
+
+  const r = await rawRequest(port, 'POST', '/api/setup/licence', { accepted: true, tos_ack: true, territory: 'applicable' }, {
+    Host: 'studio.example', Origin: 'https://elsewhere.example',
+  });
+  assert.equal(r.status, 403);
+  const error = JSON.parse(r.body).error;
+  assert.match(error, /elsewhere\.example/, 'the refusal does not name the origin it saw');
+  assert.match(error, /host studio\.example/, 'the refusal does not name the address the studio was reached on');
+});
