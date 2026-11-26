@@ -22,6 +22,11 @@
   <span data-s="busy_head">RENDER IN PROGRESS</span>
   <span data-s="busy_detail">{tag} · Status: {status} · elapsed {e} · ~{eta} left · {n}/{m} slots done</span>
   <span data-s="submit_disabled">Submit disabled — a render is running ({tag})</span>
+  <span data-s="submitting_head">SENDING TO KAGGLE</span>
+  <span data-s="submitting_detail">Preparing the job and reading live GPU quota — {s}s so far. The form stays locked until Kaggle answers.</span>
+  <span data-s="submitting_detail_slow">Still waiting on Kaggle — {s}s so far. Leave this tab open; it unlocks the moment the job is accepted or refused.</span>
+  <span data-s="submit_working">Sending…</span>
+  <span data-s="submit_caption_working">Sending to Kaggle — locks hold until it answers</span>
   <span data-s="submit_button">Render video</span>
   <span data-s="estimate">{slots} slots · {frames} frames · render ~{rm} min + {sm} min setup = ~{total}</span>
   <span data-s="seconds_range">Seconds must be a whole number from 6 to 15 for slot {n}.</span>
@@ -286,7 +291,7 @@
         <span id="dock-summary" class="dock-summary"></span>
         <div class="submit-row">
           <span id="submit-caption" class="submit-caption" hidden></span>
-          <button type="submit" id="submit-button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.8v12.4a.8.8 0 0 0 1.2.7l9.6-6.2a.8.8 0 0 0 0-1.4L7.2 3.1A.8.8 0 0 0 6 3.8z" fill="currentColor"/></svg>Render video</button>
+          <button type="submit" id="submit-button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.8v12.4a.8.8 0 0 0 1.2.7l9.6-6.2a.8.8 0 0 0 0-1.4L7.2 3.1A.8.8 0 0 0 6 3.8z" fill="currentColor"/></svg><span id="submit-label">Render video</span><span class="btn-spin" aria-hidden="true"></span></button>
         </div>
       </div>
     </div>

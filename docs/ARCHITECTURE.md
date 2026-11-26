@@ -54,6 +54,29 @@ the run panel, and the dialog will not enable until the run tag is typed. Behind
 
 `delete` on an already-gone kernel (`404`) counts as a successful stop.
 
+## The click-to-accepted window
+
+`POST /api/submissions` answers only after it has read live GPU quota (`kaggle quota`), which can take
+seconds. The page cannot wait for it in silence, and it cannot stay editable either, so the UI keeps its
+own record of the window: `submitting` is set synchronously in the submit handler, before anything is
+awaited. While it is set the banner is `submitting` (amber, a turning ring, a seconds counter that ticks
+once per second), the button turns into `Sending…` with a spinner, the fieldset is disabled, and the
+caption says the locks hold until Kaggle answers.
+
+The lock is released only by the server's answer:
+
+| answer | what the page does |
+|---|---|
+| `201` | keeps every lock, adopts the tag, and polls immediately so the banner has real slot counts instead of `0/0` |
+| `409` | adopts the running tag, keeps the locks, shows why |
+| `422` / `429` / other | unlocks, writes the reason into the form error |
+| network fault, no answer | unlocks and says to reload before retrying — the server's own busy check and one-a-minute rule still refuse a duplicate |
+
+`GET /api/state` is skipped while `submitting` is set, and every poll discards its answer if a newer poll
+superseded it or if the request was issued before `boardFloorAt` (the moment a run was accepted). Without
+that, a poll that was already in flight when the POST landed would arrive afterwards carrying a board from
+before the run and unlock the form mid-push.
+
 ## The first-run gate
 
 Before anything is rendered, `lib/setup.js` owns the state machine and `server.js` enforces it ahead of

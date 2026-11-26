@@ -125,6 +125,30 @@ button.small { padding: 4px 11px; font-size: 13px; }
 .banner.busy .dot { background: var(--sun); width: 12px; height: 12px; }
 .banner.busy strong { color: var(--sun-ink); letter-spacing: .02em; }
 .banner.busy span { color: var(--sun-ink); font-size: 14px; }
+/* Submitting: the click has landed and the server has not answered yet. Same amber
+   as a live run, so it reads as "busy" rather than "idle", but the dot is a ring
+   that turns instead of one that pulses — motion that survives a stalled request.
+   The seconds in the detail line change every second for the same reason. */
+.banner.submitting {
+  position: sticky; top: 0; z-index: 20;
+  padding-block: 14px;
+  background: var(--sun-soft);
+  border-color: var(--sun);
+  box-shadow: 0 10px 24px -16px rgba(0, 0, 0, .5);
+}
+.banner.submitting .dot {
+  width: 13px; height: 13px;
+  background: transparent;
+  border: 2.5px solid var(--sun-ink);
+  border-right-color: transparent;
+  animation: h3-turn .8s linear infinite;
+}
+.banner.submitting strong { color: var(--sun-ink); letter-spacing: .02em; }
+.banner.submitting span { color: var(--sun-ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+@keyframes h3-turn { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .banner.submitting .dot { animation: none; border-right-color: var(--sun-ink); opacity: .75; }
+}
 .banner.done { background: var(--mint-soft); border-color: transparent; }
 .banner.done .dot { background: var(--mint-ink); }
 .banner.done strong { color: var(--mint-ink); }
@@ -368,6 +392,21 @@ textarea:focus, input[type=text]:focus { outline: none; border-color: var(--acce
 #submit-button svg { width: 18px; height: 18px; }
 #submit-button:hover:not(:disabled) { color: var(--accent-ink); filter: brightness(1.08); }
 #submit-button:disabled { background: var(--line-strong); color: var(--ink-2); box-shadow: none; opacity: 1; }
+/* The click has landed but nothing has been accepted yet: keep the button looking
+   like it is working, not like it is dead, and swap the play mark for a spinner. */
+#submit-button .btn-spin { display: none; }
+#submit-button.is-submitting {
+  background: var(--sun); color: var(--sun-ink); box-shadow: none; cursor: progress;
+}
+#submit-button.is-submitting svg { display: none; }
+#submit-button.is-submitting .btn-spin {
+  display: block; width: 16px; height: 16px; border-radius: 50%;
+  border: 2.5px solid currentColor; border-right-color: transparent;
+  animation: h3-turn .8s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  #submit-button.is-submitting .btn-spin { animation: none; border-right-color: currentColor; opacity: .6; }
+}
 .form-error { margin: 0 0 10px; padding: 10px 16px; border-radius: 14px; background: var(--coral-soft); color: var(--coral-ink); font-size: 14px; font-weight: 600; }
 .history-note { color: var(--coral-ink); font-size: 13px; margin: 10px 0 0; }
 @media (max-width: 520px) {

@@ -122,6 +122,18 @@
   const BUSY_MS = 5000;  // SPEC §8.3
   const IDLE_MS = 60000; // SPEC §8.3
 
+  // A submission leaves this page before the server has answered, and the server
+  // spends that window reading live GPU quota from Kaggle. `submitting` is the
+  // local record of that window: from the click until the server rules on it the
+  // form, the dock and anything that could start or disturb a run stay locked.
+  // `boardFloorAt` marks the moment a run was accepted, so a poll issued before
+  // it cannot unlock the form with a board that predates the run.
+  let submitting = null;      // ms timestamp of the click, or null
+  let submitTicker = null;    // 1 s clock that keeps the banner alive while waiting
+  let pollSeq = 0;
+  let boardFloorAt = 0;
+  function locked() { return !!board.active || !!submitting; }
+
   function snapFrames(seconds) {
     const base = Math.max(5, Math.round(seconds * 24));
     return 17 * Math.ceil((base - 5) / 17) + 5;
@@ -273,7 +285,21 @@
     banner.querySelector('span').textContent = detail;
   }
 
+  // The wait between the click and Kaggle's answer. The seconds count is the
+  // proof of life: it changes every second even while no request can complete.
+  function submitElapsed() {
+    return submitting ? Math.max(0, Math.round((Date.now() - submitting) / 1000)) : 0;
+  }
+  function submittingDetail() {
+    const s = submitElapsed();
+    return s < 12 ? t('submitting_detail', { s }) : t('submitting_detail_slow', { s });
+  }
+
   function renderBanner() {
+    if (submitting) {
+      setBanner('submitting', t('submitting_head'), submittingDetail());
+      return;
+    }
     if (board.active) {
       setBanner('busy', t('busy_head'), activeDetail(board.active));
       return;
@@ -300,16 +326,28 @@
   }
 
   // ---- Form -----------------------------------------------------------------
+  // Locked means: a run is live on the server, or this page is waiting to hear
+  // whether one was accepted. The second case matters — the POST can take several
+  // seconds, and re-enabling the form (or the button) in that window is how a
+  // second submission, or a paste that rewrites a slot the payload already read,
+  // gets in.
   function renderFormLock() {
-    const busy = !!board.active;
+    const busy = locked();
+    const sending = !!submitting;
     $('#form-fields').disabled = busy;
     const button = $('#submit-button');
     button.disabled = busy;
+    button.classList.toggle('is-submitting', sending);
+    button.setAttribute('aria-busy', sending ? 'true' : 'false');
+    const label = $('#submit-label');
+    if (label) label.textContent = sending ? t('submit_working') : t('submit_button');
     const caption = $('#submit-caption');
     caption.hidden = !busy;
-    caption.textContent = busy ? t('submit_disabled', { tag: board.active.tag }) : '';
+    caption.textContent = !busy ? ''
+      : sending ? t('submit_caption_working')
+      : t('submit_disabled', { tag: (board.active && board.active.tag) || '' });
     $('#dock-summary').hidden = busy;
-    document.body.classList.toggle('is-busy', busy);
+    document.body.classList.toggle('is-busy', !!board.active);
     if (!busy) showFormError('');
   }
 
@@ -670,9 +708,17 @@
   // ---- Polling (SPEC §8.3) --------------------------------------------------
   let timer = null;
   async function pollNow() {
+    // Reading the board while a submission is in flight can only return a board
+    // that predates it — and applying that board would unlock the form mid-push.
+    if (submitting) { schedulePoll(); return; }
+    const seq = ++pollSeq;
+    const startedAt = Date.now();
     try {
       const r = await fetch(PREFIX + '/api/state', { cache: 'no-store' });
-      if (r.ok) { board = await r.json(); board.config = board.config || cfg; renderAll(); }
+      // Drop an answer that a newer poll replaced, or that was requested before a
+      // run was accepted: both are older than what this page already knows.
+      const stale = seq !== pollSeq || !!submitting || startedAt < boardFloorAt;
+      if (!stale && r.ok) { board = await r.json(); board.config = board.config || cfg; renderAll(); }
     } catch (e) { /* keep the last known board; never invent a status */ }
     clearTimeout(timer);
     timer = setTimeout(pollNow, board.active ? BUSY_MS : IDLE_MS);
@@ -721,7 +767,9 @@
   }
 
   function acceptFile(n, file) {
-    if (!file || board.active) return;
+    // A drop can land on the card even while the fieldset is disabled, and the
+    // payload for a submission already in flight has been read.
+    if (!file || locked()) return;
     if (file.size > MAXBYTES) {
       setSlotError(n, t('image_too_big', { n, mb: (file.size / 1048576).toFixed(1) }));
       return;
@@ -794,57 +842,96 @@
     return ok;
   }
 
+  // ---- Submitting ------------------------------------------------------------
+  // The click has to change the page before anything is awaited: the POST below
+  // spends seconds waiting on the server's live quota read, and silence in that
+  // window is what makes people click again or reload mid-push.
+  function beginSubmit() {
+    submitting = Date.now();
+    showFormError('');
+    renderAll();
+    window.scrollTo({ top: 0, behavior: SMOOTH });
+    clearInterval(submitTicker);
+    submitTicker = setInterval(renderBanner, 1000);
+  }
+  function endSubmit() {
+    clearInterval(submitTicker);
+    submitTicker = null;
+    submitting = null;
+  }
+
   async function submit(event) {
     event.preventDefault();
-    if (board.active) return;
+    if (locked()) return;
     if (!validate()) {
       const bad = $('.slot-card.invalid');
       if (bad) bad.scrollIntoView({ behavior: SMOOTH, block: 'center' });
       else promptEl(1).focus();
       return;
     }
-    showFormError('');
-    const active = slots.filter(filled);
-    const payloadSlots = [];
-    for (const s of active) {
-      const item = { n: s.n, prompt: promptEl(s.n).value.trim(), seconds: seconds(s.n) };
-      if (s.file) {
-        item.image_base64 = await toBase64(s.file);
-        item.image_name = s.name;
-      }
-      payloadSlots.push(item);
-    }
-    const submissionId = (window.crypto && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const payload = {
-      submission_id: submissionId, note: $('#run-note').value, slots: payloadSlots,
-    };
-    let r, data;
+    beginSubmit();
+    let accepted = null;
+    let failure = '';
     try {
-      r = await fetch(PREFIX + '/api/submissions', {
-        method: 'POST', headers: writeHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(payload),
-      });
-      data = await r.json().catch(() => ({}));
-    } catch (e) { showFormError(`Submit failed: ${e.message}`); return; }
-    if (r.status === 409) {
-      showFormError(t('busy_409'));
-      board.active = { tag: data.active_tag || '', phase: data.phase || 'QUEUED' };
+      const active = slots.filter(filled);
+      const payloadSlots = [];
+      for (const s of active) {
+        const item = { n: s.n, prompt: promptEl(s.n).value.trim(), seconds: seconds(s.n) };
+        if (s.file) {
+          item.image_base64 = await toBase64(s.file);
+          item.image_name = s.name;
+        }
+        payloadSlots.push(item);
+      }
+      const submissionId = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `ui-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const payload = {
+        submission_id: submissionId, note: $('#run-note').value, slots: payloadSlots,
+      };
+      let r, data;
+      try {
+        r = await fetch(PREFIX + '/api/submissions', {
+          method: 'POST', headers: writeHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(payload),
+        });
+        data = await r.json().catch(() => ({}));
+      } catch (e) {
+        // The answer never arrived, so whether a run started is unknown. The form
+        // unlocks (a dead page helps nobody) and the message says to check: the
+        // server still refuses a duplicate through its busy check and its
+        // one-a-minute rule, so a retry cannot quietly start the same work twice.
+        failure = `Submit failed: ${e.message}. Reload the page to see whether the run started before trying again.`;
+        return;
+      }
+      if (r.status === 409) {
+        failure = t('busy_409');
+        board.active = { tag: data.active_tag || '', phase: data.phase || 'QUEUED' };
+        boardFloorAt = Date.now();
+        return;
+      }
+      if (r.status === 422 && data.need_h != null) {
+        failure = t('quota_422', { need: data.need_h, left: data.left_h });
+        return;
+      }
+      if (!r.ok) { failure = data.error || `Submit failed (${r.status}).`; return; }
+      accepted = data;
+    } finally {
+      endSubmit();
+      if (accepted) {
+        board.active = { tag: accepted.tag, phase: accepted.phase || 'QUEUED' };
+        boardFloorAt = Date.now();
+        $('#run-note').value = '';
+        window.scrollTo({ top: 0, behavior: SMOOTH });
+      }
       renderAll();
-      schedulePoll();
-      return;
+      // renderAll() clears a stale error when the form is free, so the message for
+      // this attempt has to be written after it, not before.
+      if (failure) showFormError(failure);
+      // A fresh board right away: the submit response carries only the tag and the
+      // phase, so without this the banner would read "0/0 slots" for five seconds.
+      if (accepted) { clearTimeout(timer); pollNow(); } else schedulePoll();
     }
-    if (r.status === 422 && data.need_h != null) {
-      showFormError(t('quota_422', { need: data.need_h, left: data.left_h }));
-      return;
-    }
-    if (!r.ok) { showFormError(data.error || `Submit failed (${r.status}).`); return; }
-    board.active = { tag: data.tag, phase: data.phase || 'QUEUED' };
-    $('#run-note').value = '';
-    renderAll();
-    schedulePoll();
-    window.scrollTo({ top: 0, behavior: SMOOTH });
   }
 
   async function cancel(tag, phase) {
@@ -922,7 +1009,7 @@
 
   function openStopDialog() {
     const { tag, phase, ref } = stopTarget;
-    if (!tag) return;
+    if (!tag || submitting) return;
     const remote = phase === 'PUSHED' || phase === 'GPU_QUEUED' || phase === 'RENDERING';
     const finished = phase === 'KERNEL_COMPLETE' || phase === 'DOWNLOADING' || phase === 'VERIFYING';
     const lede = finished ? t('stop_lede_finished')
@@ -1022,7 +1109,7 @@
 
   // Paste a screenshot or copied image: it goes to the focused card, else the first card without one.
   document.addEventListener('paste', (e) => {
-    if (board.active || !e.clipboardData) return;
+    if (locked() || !e.clipboardData) return;
     const image = Array.from(e.clipboardData.files || []).find((f) => /^image\//.test(f.type));
     if (!image) return;
     const host = document.activeElement && document.activeElement.closest
